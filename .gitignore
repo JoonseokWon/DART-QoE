@@ -1,0 +1,8 @@
+outputs/
+tmp/
+node_modules/
+__pycache__/
+*.pyc
+.dart_qoe_config.json
+.agents/
+.codex/
