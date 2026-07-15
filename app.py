@@ -4,8 +4,8 @@ import json
 import os
 import subprocess
 import sys
-import tempfile
 import threading
+import traceback
 import webbrowser
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -13,9 +13,18 @@ from pathlib import Path
 
 from qoe import analyze_dart, demo_analysis, save_json
 
-ROOT = Path(__file__).resolve().parent
+FROZEN = bool(getattr(sys, "frozen", False))
+BUNDLE_ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+ROOT = Path(sys.executable).resolve().parent if FROZEN else Path(__file__).resolve().parent
 OUTPUTS = ROOT / "outputs"
 NODE_DEFAULT = Path(r"C:\Users\user\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe")
+
+
+def debug_log(message: str) -> None:
+    if not os.environ.get("DART_QOE_DEBUG"):
+        return
+    with (ROOT / "DART-QoE-startup.log").open("a", encoding="utf-8") as handle:
+        handle.write(f"{datetime.now().isoformat()} {message}\n")
 
 HTML = r'''<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>DART-QoE</title><style>
@@ -34,14 +43,21 @@ def export_excel(data: dict, stem: str) -> Path:
     json_path = OUTPUTS / f".{safe}_{stamp}.json"
     out = OUTPUTS / f"DART-QoE_{safe}_{stamp}.xlsx"
     save_json(data, json_path)
-    node = Path(os.environ.get("DART_QOE_NODE", NODE_DEFAULT))
+    bundled_node = BUNDLE_ROOT / "node" / "node.exe"
+    node = Path(os.environ.get("DART_QOE_NODE", bundled_node if FROZEN else NODE_DEFAULT))
     if not node.exists():
         raise RuntimeError("Node.js 실행 파일을 찾지 못했습니다. DART_QOE_NODE 환경변수를 설정하세요.")
     env = os.environ.copy()
-    env.setdefault("NODE_PATH", r"C:\Users\user\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\node_modules")
+    default_node_path = BUNDLE_ROOT / "node_modules" if FROZEN else Path(
+        r"C:\Users\user\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\node_modules"
+    )
+    env.setdefault("NODE_PATH", str(default_node_path))
     try:
-        cp = subprocess.run([str(node), str(ROOT / "export_workbook.mjs"), str(json_path), str(out)], cwd=ROOT, env=env,
-                            capture_output=True, text=True, encoding="utf-8", timeout=180)
+        cp = subprocess.run(
+            [str(node), str(BUNDLE_ROOT / "export_workbook.mjs"), str(json_path), str(out)],
+            cwd=BUNDLE_ROOT, env=env, capture_output=True, text=True, encoding="utf-8", timeout=180,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
         if cp.returncode:
             raise RuntimeError(cp.stderr[-2000:] or cp.stdout[-2000:])
     finally:
@@ -85,19 +101,41 @@ class Handler(BaseHTTPRequestHandler):
             self._json(400, {"error": str(exc)})
 
     def log_message(self, fmt, *args):
-        print(f"[{self.log_date_time_string()}] {fmt % args}")
+        if sys.stdout:
+            print(f"[{self.log_date_time_string()}] {fmt % args}")
 
 
 def main():
-    host, port = "127.0.0.1", 8765
-    server = ThreadingHTTPServer((host, port), Handler)
+    host = "127.0.0.1"
+    configured_port = os.environ.get("DART_QOE_PORT")
+    requested_port = int(configured_port or "8765")
+    debug_log("main entered")
+    try:
+        server = ThreadingHTTPServer((host, requested_port), Handler)
+    except OSError:
+        if configured_port:
+            raise
+        # The default port may be occupied by another local program. Let the
+        # operating system allocate a free port so the desktop app still opens.
+        server = ThreadingHTTPServer((host, 0), Handler)
+    port = server.server_address[1]
+    debug_log(f"server created on port {port}")
     url = f"http://{host}:{port}"
-    print(f"DART-QoE 실행: {url}")
+    if sys.stdout:
+        print(f"DART-QoE 실행: {url}")
     if "--no-browser" not in sys.argv:
         threading.Timer(0.7, lambda: webbrowser.open(url)).start()
+    debug_log("serve_forever starting")
     try: server.serve_forever()
     except KeyboardInterrupt: pass
     finally: server.server_close()
 
 
-if __name__ == "__main__": main()
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception:
+        try:
+            (ROOT / "DART-QoE-error.log").write_text(traceback.format_exc(), encoding="utf-8")
+        finally:
+            raise

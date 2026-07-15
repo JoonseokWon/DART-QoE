@@ -1,0 +1,52 @@
+param(
+    [string]$Python = "C:\Users\user\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe",
+    [switch]$Windowed
+)
+
+$ErrorActionPreference = "Stop"
+$Root = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
+$Runtime = "C:\Users\user\.cache\codex-runtimes\codex-primary-runtime\dependencies"
+$Node = Join-Path $Runtime "node\bin\node.exe"
+$ArtifactTool = Join-Path $Runtime "node\node_modules\@oai\artifact-tool"
+$Build = Join-Path $Root "build\pyinstaller"
+$Dist = Join-Path $Root "dist"
+$TargetName = if ($Windowed) { "DART-QoE-Windowed" } else { "DART-QoE" }
+$WindowMode = if ($Windowed) { "--windowed" } else { "--console" }
+$Output = Join-Path $Root "$TargetName.exe"
+
+foreach ($Path in @($Python, $Node, $ArtifactTool, (Join-Path $Root "export_workbook.mjs"))) {
+    if (-not (Test-Path -LiteralPath $Path)) {
+        throw "Required build dependency not found: $Path"
+    }
+}
+
+New-Item -ItemType Directory -Force -Path $Build, $Dist | Out-Null
+
+& $Python -m PyInstaller `
+    --noconfirm `
+    --clean `
+    --onefile `
+    $WindowMode `
+    --name $TargetName `
+    --distpath $Dist `
+    --workpath $Build `
+    --specpath $Build `
+    --add-data "$(Join-Path $Root 'export_workbook.mjs');." `
+    --add-binary "$Node;node" `
+    --add-data "$ArtifactTool;node_modules\@oai\artifact-tool" `
+    (Join-Path $Root "app.py")
+
+if ($LASTEXITCODE -ne 0) {
+    throw "PyInstaller build failed with exit code $LASTEXITCODE"
+}
+
+$Built = Join-Path $Dist "$TargetName.exe"
+if (-not (Test-Path -LiteralPath $Built)) {
+    throw "Executable not found after build: $Built"
+}
+
+Copy-Item -LiteralPath $Built -Destination $Output -Force
+$Hash = (Get-FileHash -LiteralPath $Output -Algorithm SHA256).Hash.ToLowerInvariant()
+Write-Output "Executable: $Output"
+Write-Output "Size: $((Get-Item -LiteralPath $Output).Length) bytes"
+Write-Output "SHA256: $Hash"
