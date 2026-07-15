@@ -1,6 +1,6 @@
 param(
     [string]$Python = "C:\Users\user\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe",
-    [switch]$Windowed
+    [switch]$Console
 )
 
 $ErrorActionPreference = "Stop"
@@ -8,10 +8,12 @@ $Root = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
 $Runtime = "C:\Users\user\.cache\codex-runtimes\codex-primary-runtime\dependencies"
 $Node = Join-Path $Runtime "node\bin\node.exe"
 $ArtifactTool = Join-Path $Runtime "node\node_modules\@oai\artifact-tool"
+$env:TCL_LIBRARY = Join-Path $Runtime "python\tcl\tcl8.6"
+$env:TK_LIBRARY = Join-Path $Runtime "python\tcl\tk8.6"
 $Build = Join-Path $Root "build\pyinstaller"
 $Dist = Join-Path $Root "dist"
-$TargetName = if ($Windowed) { "DART-QoE-Windowed" } else { "DART-QoE" }
-$WindowMode = if ($Windowed) { "--windowed" } else { "--console" }
+$TargetName = "DART-QoE"
+$WindowMode = if ($Console) { "--console" } else { "--windowed" }
 $Output = Join-Path $Root "$TargetName.exe"
 
 foreach ($Path in @($Python, $Node, $ArtifactTool, (Join-Path $Root "export_workbook.mjs"))) {
