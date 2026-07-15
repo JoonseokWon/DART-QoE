@@ -108,7 +108,9 @@ class Handler(BaseHTTPRequestHandler):
 def main():
     host = "127.0.0.1"
     configured_port = os.environ.get("DART_QOE_PORT")
-    requested_port = int(configured_port or "8765")
+    # Keep a dedicated default port so other portfolio tools (for example,
+    # Food-Fee on 8765) cannot be mistaken for DART-QoE.
+    requested_port = int(configured_port or "18765")
     debug_log("main entered")
     try:
         server = ThreadingHTTPServer((host, requested_port), Handler)
@@ -124,7 +126,7 @@ def main():
     if sys.stdout:
         print(f"DART-QoE 실행: {url}")
     if "--no-browser" not in sys.argv:
-        threading.Timer(0.7, lambda: webbrowser.open(url)).start()
+        threading.Timer(0.7, lambda: webbrowser.open_new_tab(url)).start()
     debug_log("serve_forever starting")
     try: server.serve_forever()
     except KeyboardInterrupt: pass
