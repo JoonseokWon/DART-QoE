@@ -23,6 +23,8 @@ class AutomaticRestartTests(unittest.TestCase):
         self.assertIn("Stop-Process -Force", script)
         self.assertIn("Copy-Item -LiteralPath", script)
         self.assertIn("Start-Sleep -Milliseconds 2000", script)
+        self.assertIn("Remove-Item Env:TCL_LIBRARY", script)
+        self.assertIn("Remove-Item Env:TK_LIBRARY", script)
         self.assertIn("Start-Process -FilePath $current", script)
         self.assertIn(str(update), script)
 

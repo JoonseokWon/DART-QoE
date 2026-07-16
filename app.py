@@ -18,8 +18,10 @@ from pathlib import Path
 # includes those directories explicitly, so point Tk at them before import.
 if getattr(sys, "frozen", False):
     bundle_root = getattr(sys, "_MEIPASS", os.path.dirname(sys.executable))
-    os.environ.setdefault("TCL_LIBRARY", os.path.join(bundle_root, "_tcl_data"))
-    os.environ.setdefault("TK_LIBRARY", os.path.join(bundle_root, "_tk_data"))
+    # Always replace inherited values: an auto-update helper may otherwise
+    # carry paths to the previous process's already-deleted _MEI directory.
+    os.environ["TCL_LIBRARY"] = os.path.join(bundle_root, "_tcl_data")
+    os.environ["TK_LIBRARY"] = os.path.join(bundle_root, "_tk_data")
 
 import tkinter as tk
 from tkinter import font as tkfont
@@ -112,6 +114,8 @@ for ($attempt = 0; $attempt -lt 40; $attempt++) {{
 }}
 if (Test-Path -LiteralPath $current) {{
     Start-Sleep -Milliseconds 2000
+    Remove-Item Env:TCL_LIBRARY -ErrorAction SilentlyContinue
+    Remove-Item Env:TK_LIBRARY -ErrorAction SilentlyContinue
     Start-Process -FilePath $current -WorkingDirectory $working
 }}
 """.strip()
