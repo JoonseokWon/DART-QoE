@@ -71,11 +71,15 @@ summary.getRange(`B9:${lastCol}9`).format.numberFormat = amountFmt; summary.getR
 summary.getRange(`B11:${lastCol}13`).format.numberFormat = amountFmt;
 summary.getRange("A7:F7").format.borders = { top: { style:"thin", color:navy } };
 summary.getRange("A15:H15").merge(); summary.getRange("A15").values = [["해석 주의: 영업이익 대비 영업현금흐름 저하, 순이익–영업현금흐름 괴리 확대, 순차입금 증가는 결론이 아니라 추가 질문의 출발점입니다."]]; summary.getRange("A15:H15").format = { fill: amber, wrapText:true, rowHeight:30 };
-// Chart helper block uses formulas so source edits flow through.
-summary.getRange("J4:L4").values = [["연도","영업이익률","영업현금흐름/영업이익"]];
-data.years.forEach((y,i)=>{ const row=5+i, src=String.fromCharCode(66+i); summary.getRange(`J${row}:L${row}`).formulas=[[`=${src}$4`,`=${src}$8`,`=${src}$10`]]; });
-const chart = summary.charts.add("line", summary.getRange(`J4:L${4+data.years.length}`));
-chart.title="이익률과 현금전환 추이"; chart.hasLegend=true; chart.yAxis={numberFormatCode:"0%"}; chart.setPosition("J9","Q22");
+// Keep the formula-backed chart source below the chart so longer analysis periods
+// can extend downward without colliding with the summary or chart area.
+const chartSourceHeaderRow = 20;
+const chartSourceFirstRow = chartSourceHeaderRow + 1;
+const chartSourceLastRow = chartSourceHeaderRow + data.years.length;
+summary.getRange(`J${chartSourceHeaderRow}:L${chartSourceHeaderRow}`).values = [["연도","영업이익률","영업현금흐름/영업이익"]];
+data.years.forEach((y,i)=>{ const row=chartSourceFirstRow+i, src=String.fromCharCode(66+i); summary.getRange(`J${row}:L${row}`).formulas=[[`=${src}$4`,`=${src}$8`,`=${src}$10`]]; });
+const chart = summary.charts.add("line", summary.getRange(`J${chartSourceHeaderRow}:L${chartSourceLastRow}`));
+chart.title="이익률과 현금전환 추이"; chart.hasLegend=true; chart.yAxis={numberFormatCode:"0%"}; chart.setPosition("J4","Q17");
 summary.freezePanes.freezeRows(4); widths(summary,{A:28,B:16,C:16,D:16,E:16,F:16,G:3,H:16,I:3,J:16,K:16,L:16,M:16,N:16,O:16,P:16,Q:16});
 
 title(wc, "운전자본 | 회전일수와 순운전자본", "F");
