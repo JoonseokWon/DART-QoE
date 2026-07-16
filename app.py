@@ -292,6 +292,7 @@ class NativeWindowsEntry:
     WS_VISIBLE = 0x10000000
     WS_TABSTOP = 0x00010000
     WS_BORDER = 0x00800000
+    ES_CENTER = 0x0001
     ES_AUTOHSCROLL = 0x0080
     EM_SETPASSWORDCHAR = 0x00CC
     WM_SETFONT = 0x0030
@@ -361,7 +362,14 @@ class NativeWindowsEntry:
         gdi32.DeleteObject.argtypes = (wintypes.HGDIOBJ,)
         gdi32.DeleteObject.restype = wintypes.BOOL
 
-        styles = self.WS_CHILD | self.WS_VISIBLE | self.WS_TABSTOP | self.WS_BORDER | self.ES_AUTOHSCROLL
+        styles = (
+            self.WS_CHILD
+            | self.WS_VISIBLE
+            | self.WS_TABSTOP
+            | self.WS_BORDER
+            | self.ES_CENTER
+            | self.ES_AUTOHSCROLL
+        )
         self.hwnd = user32.CreateWindowExW(
             0,
             "EDIT",
@@ -379,7 +387,9 @@ class NativeWindowsEntry:
         if not self.hwnd:
             raise ctypes.WinError()
 
-        font_height = -max(16, round(16 * scale))
+        # Match the 10-point Tk controls instead of letting native entries
+        # appear larger at high DPI.
+        font_height = -max(14, round(14 * scale))
         self.font_handle = gdi32.CreateFontW(
             font_height,
             0,
@@ -652,7 +662,7 @@ class DartQoeApp:
         header.pack(fill="x")
         header.pack_propagate(False)
         tk.Label(header, text="DART-QoE", bg=NAVY, fg=WHITE, font=("맑은 고딕", 28, "bold")).pack(
-            anchor="w", padx=self.px(38), pady=(self.px(20), self.px(2))
+            anchor="center", padx=self.px(38), pady=(self.px(20), self.px(2))
         )
         tk.Label(
             header,
@@ -660,14 +670,14 @@ class DartQoeApp:
             bg=NAVY,
             fg="#D9E7F3",
             font=("맑은 고딕", 11),
-        ).pack(anchor="w", padx=self.px(40))
+        ).pack(anchor="center", padx=self.px(40))
         tk.Label(
             header,
             text="자동 결론이 아니라 원문 확인 항목과 계산 근거를 제시합니다.",
             bg=NAVY,
             fg="#AFC5D8",
             font=("맑은 고딕", 10),
-        ).pack(anchor="w", padx=self.px(40), pady=(self.px(3), 0))
+        ).pack(anchor="center", padx=self.px(40), pady=(self.px(3), 0))
 
         body = tk.Frame(self.root, bg=BG)
         body.pack(fill="both", expand=True, padx=self.px(28), pady=self.px(22))
@@ -691,8 +701,8 @@ class DartQoeApp:
                         padx=self.px(24), pady=self.px(21))
 
     def _field_label(self, parent: tk.Widget, text: str) -> None:
-        tk.Label(parent, text=text, bg=WHITE, fg=INK, font=("맑은 고딕", 10, "bold")).pack(
-            anchor="w", pady=(self.px(12), self.px(5))
+        tk.Label(parent, text=text, bg=WHITE, fg=INK, font=("맑은 고딕", 10, "bold"), anchor="center").pack(
+            fill="x", pady=(self.px(12), self.px(5))
         )
 
     def _text_entry(
@@ -721,6 +731,7 @@ class DartQoeApp:
             "highlightthickness": 1,
             "highlightbackground": LINE,
             "highlightcolor": BLUE,
+            "justify": "center",
         }
         if show is not None:
             options["show"] = show
@@ -729,7 +740,9 @@ class DartQoeApp:
         return entry
 
     def _build_form(self, form: tk.Frame) -> None:
-        tk.Label(form, text="분석 조건", bg=WHITE, fg=NAVY, font=("맑은 고딕", 18, "bold")).pack(anchor="w")
+        tk.Label(form, text="분석 조건", bg=WHITE, fg=NAVY, font=("맑은 고딕", 18, "bold")).pack(
+            anchor="center"
+        )
         tk.Label(
             form,
             text="연결재무제표를 우선하여 최근 사업연도를 분석합니다.",
@@ -737,8 +750,8 @@ class DartQoeApp:
             fg=MUTED,
             font=("맑은 고딕", 10),
             wraplength=self.px(330),
-            justify="left",
-        ).pack(anchor="w", pady=(self.px(4), self.px(7)))
+            justify="center",
+        ).pack(fill="x", pady=(self.px(4), self.px(7)))
 
         saved_api_key = load_saved_api_key()
         self.api_var = tk.StringVar(value=saved_api_key)
@@ -756,21 +769,25 @@ class DartQoeApp:
             text="이 PC에 암호화하여 저장",
             variable=self.save_key_var,
             command=self._storage_preference_changed,
-        ).pack(anchor="w", pady=(self.px(7), 0))
+        ).pack(anchor="center", pady=(self.px(7), 0))
         self._field_label(form, "회사명 또는 종목코드")
         self._text_entry(form, self.company_var)
         self._field_label(form, "분석기간")
         years = tk.Frame(form, bg=WHITE)
         years.pack(fill="x")
         years.grid_columnconfigure((0, 2), weight=1)
-        ttk.Spinbox(years, from_=2015, to=2030, textvariable=self.begin_var, width=8).grid(row=0, column=0, sticky="ew")
+        ttk.Spinbox(
+            years, from_=2015, to=2030, textvariable=self.begin_var, width=8, justify="center"
+        ).grid(row=0, column=0, sticky="ew")
         tk.Label(years, text="—", bg=WHITE, fg=MUTED).grid(row=0, column=1, padx=self.px(8))
-        ttk.Spinbox(years, from_=2015, to=2030, textvariable=self.end_var, width=8).grid(row=0, column=2, sticky="ew")
+        ttk.Spinbox(
+            years, from_=2015, to=2030, textvariable=self.end_var, width=8, justify="center"
+        ).grid(row=0, column=2, sticky="ew")
 
         ttk.Checkbutton(form, text="순차입금에 리스부채 포함", variable=self.lease_var).pack(
-            anchor="w", pady=(self.px(16), self.px(4)))
+            anchor="center", pady=(self.px(16), self.px(4)))
         ttk.Checkbutton(form, text="사업보고서 원문에서 후보 탐색", variable=self.notes_var).pack(
-            anchor="w", pady=self.px(4))
+            anchor="center", pady=self.px(4))
 
         self.run_button = tk.Button(
             form,
@@ -792,19 +809,19 @@ class DartQoeApp:
         notice.grid_columnconfigure(1, weight=1)
         for row, (label, value) in enumerate((("인증키", "윈도우 계정으로 암호화 저장"),)):
             tk.Label(notice, text=label, bg=AMBER, fg="#695A20", font=("맑은 고딕", 9, "bold")).grid(
-                row=row, column=0, sticky="nw", padx=(0, self.px(12)), pady=self.px(2))
+                row=row, column=0, sticky="n", padx=(0, self.px(12)), pady=self.px(2))
             tk.Label(notice, text=value, bg=AMBER, fg="#695A20", font=("맑은 고딕", 9)).grid(
-                row=row, column=1, sticky="nw", pady=self.px(2))
+                row=row, column=1, sticky="n", pady=self.px(2))
 
     def _build_result(self, result: tk.Frame) -> None:
         tk.Label(result, text="검토 결과", bg=WHITE, fg=NAVY, font=("맑은 고딕", 18, "bold")).grid(
-            row=0, column=0, sticky="w"
+            row=0, column=0, sticky="ew"
         )
         self.status_var = tk.StringVar(value="준비됨")
         self.status_label = tk.Label(
             result, textvariable=self.status_var, bg=WHITE, fg=GREEN, font=("맑은 고딕", 10, "bold")
         )
-        self.status_label.configure(anchor="w", justify="left", wraplength=self.px(650))
+        self.status_label.configure(anchor="center", justify="center", wraplength=self.px(650))
         self.status_label.grid(row=1, column=0, sticky="ew", pady=(self.px(5), self.px(11)))
         self.progress = ttk.Progressbar(result, mode="determinate", maximum=100, value=0)
         self.progress.grid(row=2, column=0, sticky="ew", pady=(0, self.px(17)))
@@ -816,7 +833,7 @@ class DartQoeApp:
             checks.grid_columnconfigure(column, weight=1, uniform="checks")
         for index, text in enumerate(("보고이익", "현금전환", "운전자본", "순차입금", "정상화 조정 후보")):
             tk.Label(checks, text=text, bg=PALE, fg=NAVY, font=("맑은 고딕", 9, "bold"),
-                     anchor="w").grid(row=index // 3, column=index % 3, sticky="ew", padx=self.px(4), pady=self.px(3))
+                     anchor="center").grid(row=index // 3, column=index % 3, sticky="ew", padx=self.px(4), pady=self.px(3))
 
         self.summary = tk.Text(
             result,
@@ -840,8 +857,10 @@ class DartQoeApp:
 
         actions = tk.Frame(result, bg=WHITE)
         actions.grid(row=5, column=0, sticky="ew", pady=(self.px(15), 0))
+        action_group = tk.Frame(actions, bg=WHITE)
+        action_group.pack(anchor="center")
         self.open_button = tk.Button(
-            actions,
+            action_group,
             text="엑셀 열기",
             command=self.open_excel,
             state="disabled",
@@ -855,7 +874,7 @@ class DartQoeApp:
         )
         self.open_button.pack(side="left")
         self.folder_button = tk.Button(
-            actions,
+            action_group,
             text="저장 폴더 열기",
             command=self.open_folder,
             bg=PALE,
@@ -882,8 +901,14 @@ class DartQoeApp:
                 self.summary.tag_add("summary_heading", start, end)
             elif line.startswith("•"):
                 self.summary.tag_add("summary_bullet", start, end)
-        self.summary.tag_configure("summary_title", font=("맑은 고딕", 14, "bold"), foreground=NAVY, spacing3=self.px(8))
-        self.summary.tag_configure("summary_heading", font=("맑은 고딕", 10, "bold"), foreground=BLUE, spacing1=self.px(7))
+        self.summary.tag_configure(
+            "summary_title", font=("맑은 고딕", 14, "bold"), foreground=NAVY,
+            spacing3=self.px(8), justify="center"
+        )
+        self.summary.tag_configure(
+            "summary_heading", font=("맑은 고딕", 10, "bold"), foreground=BLUE,
+            spacing1=self.px(7), justify="center"
+        )
         self.summary.tag_configure("summary_bullet", lmargin1=self.px(4), lmargin2=self.px(16), spacing3=self.px(2))
         self.summary.configure(state="disabled")
 
