@@ -260,9 +260,9 @@ class DartQoeApp:
         saved_api_key = load_saved_api_key()
         self.api_var = tk.StringVar(value=saved_api_key)
         self.save_key_var = tk.BooleanVar(value=True)
-        self.company_var = tk.StringVar(value="휴메딕스")
+        self.company_var = tk.StringVar(value="")
         self.begin_var = tk.StringVar(value="2022")
-        self.end_var = tk.StringVar(value="2024")
+        self.end_var = tk.StringVar(value="2026")
         self.lease_var = tk.BooleanVar(value=True)
         self.notes_var = tk.BooleanVar(value=True)
 
