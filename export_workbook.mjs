@@ -26,6 +26,16 @@ function title(sheet, text, endCol="H") {
 }
 function header(range) { range.format = { fill: blue, font: { bold: true, color: "#FFFFFF" }, verticalAlignment: "center", wrapText: true, borders: { preset: "inside", style: "thin", color: "#D9E2F3" } }; }
 function widths(sheet, specs) { for (const [col, width] of Object.entries(specs)) sheet.getRange(`${col}:${col}`).format.columnWidth = width; }
+function excelCol(index) {
+  let value = index;
+  let result = "";
+  while (value > 0) {
+    value -= 1;
+    result = String.fromCharCode(65 + (value % 26)) + result;
+    value = Math.floor(value / 26);
+  }
+  return result;
+}
 
 title(cover, "DART-QoE | 정상화 이익과 운전자본 검토", "J");
 cover.getRange("B5").format.numberFormat = "000000";
@@ -54,15 +64,16 @@ inputs.getRange(`B5:L${4+data.metrics.length}`).format = { numberFormat: amountF
 inputs.getRange(`O5:O${4+data.metrics.length}`).format = { fill: amber, font: { color: "#0000FF" } };
 inputs.freezePanes.freezeRows(4); widths(inputs,{A:10,B:17,C:17,D:17,E:19,F:17,G:17,H:17,I:20,J:17,K:18,L:16,M:26,N:12,O:28});
 
-title(summary, "QoE 요약 | 보고이익·현금전환·순차입금", "F");
+const lastCol = excelCol(1 + data.years.length);
+const summaryEndCol = excelCol(Math.max(1 + data.years.length, 8));
+title(summary, "QoE 요약 | 보고이익·현금전환·순차입금", summaryEndCol);
 summary.getRange("A4").values = [["지표"]];
 summary.getRange("A5:A14").values = [["매출액"],["매출 성장률"],["영업이익"],["영업이익률"],["영업현금흐름"],["영업이익 대비 영업현금흐름"],["순이익"],["순이익–영업현금흐름 괴리"],["순차입금"],["검토 후보 수"]];
-summary.getRange(`B4:${String.fromCharCode(65+data.years.length)}4`).values = [data.years];
-const lastCol = String.fromCharCode(65+data.years.length);
+summary.getRange(`B4:${lastCol}4`).values = [data.years];
 summary.getRange(`B4:${lastCol}4`).format = { fill: pale, font: { bold: true }, horizontalAlignment: "right" };
 data.years.forEach((y,i) => {
-  const c = String.fromCharCode(66+i), src = 5+i;
-  summary.getRange(`${c}5:${c}14`).formulas = [[`='원천 자료'!B${src}`],[i?`=IFERROR(${c}5/${String.fromCharCode(65+i)}5-1,"")`:""],[`='원천 자료'!C${src}`],[`=IFERROR(${c}7/${c}5,"")`],[`='원천 자료'!E${src}`],[`=IFERROR(${c}9/${c}7,"")`],[`='원천 자료'!D${src}`],[`=${c}11-${c}9`],[`='원천 자료'!K${src}+IF('표지'!$B$10="순차입금에 포함",'원천 자료'!L${src},0)-'원천 자료'!I${src}`],[`=COUNTIF('검토 후보'!$A$5:$A$204,${c}$4)`]];
+  const c = excelCol(2+i), src = 5+i;
+  summary.getRange(`${c}5:${c}14`).formulas = [[`='원천 자료'!B${src}`],[i?`=IFERROR(${c}5/${excelCol(1+i)}5-1,"")`:""],[`='원천 자료'!C${src}`],[`=IFERROR(${c}7/${c}5,"")`],[`='원천 자료'!E${src}`],[`=IFERROR(${c}9/${c}7,"")`],[`='원천 자료'!D${src}`],[`=${c}11-${c}9`],[`='원천 자료'!K${src}+IF('표지'!$B$10="순차입금에 포함",'원천 자료'!L${src},0)-'원천 자료'!I${src}`],[`=COUNTIF('검토 후보'!$A$5:$A$204,${c}$4)`]];
   summary.getRange(`${c}5:${c}14`).format.font = { color: "#000000" };
 });
 summary.getRange(`B5:${lastCol}5`).format.numberFormat = amountFmt; summary.getRange(`B6:${lastCol}6`).format.numberFormat = pctFmt;
@@ -70,27 +81,28 @@ summary.getRange(`B7:${lastCol}7`).format.numberFormat = amountFmt; summary.getR
 summary.getRange(`B9:${lastCol}9`).format.numberFormat = amountFmt; summary.getRange(`B10:${lastCol}10`).format.numberFormat = pctFmt;
 summary.getRange(`B11:${lastCol}13`).format.numberFormat = amountFmt;
 summary.getRange("A7:F7").format.borders = { top: { style:"thin", color:navy } };
-summary.getRange("A15:H15").merge(); summary.getRange("A15").values = [["추가 확인이 필요한 지표: 영업이익 대비 영업현금흐름 저하, 순이익–영업현금흐름 괴리 확대, 순차입금 증가는 기업에 대한 결론이 아니라 추가 검토 신호입니다."]]; summary.getRange("A15:H15").format = { fill: amber, wrapText:true, rowHeight:30 };
-// Keep the formula-backed chart source below the chart so longer analysis periods
-// can extend downward without colliding with the summary or chart area.
+summary.getRange(`A15:${summaryEndCol}15`).merge(); summary.getRange("A15").values = [["추가 확인이 필요한 지표: 영업이익 대비 영업현금흐름 저하, 순이익–영업현금흐름 괴리 확대, 순차입금 증가는 기업에 대한 결론이 아니라 추가 검토 신호입니다."]]; summary.getRange(`A15:${summaryEndCol}15`).format = { fill: amber, wrapText:true, rowHeight:30 };
+// Keep the chart source and chart below the horizontal summary so longer
+// analysis periods can add year columns without overlapping either area.
 const chartSourceHeaderRow = 20;
 const chartSourceFirstRow = chartSourceHeaderRow + 1;
 const chartSourceLastRow = chartSourceHeaderRow + data.years.length;
-summary.getRange(`J${chartSourceHeaderRow}:L${chartSourceHeaderRow}`).values = [["연도","영업이익률","영업현금흐름/영업이익"]];
-data.years.forEach((y,i)=>{ const row=chartSourceFirstRow+i, src=String.fromCharCode(66+i); summary.getRange(`J${row}:L${row}`).formulas=[[`=${src}$4`,`=${src}$8`,`=${src}$10`]]; });
-const chart = summary.charts.add("line", summary.getRange(`J${chartSourceHeaderRow}:L${chartSourceLastRow}`));
-chart.title="이익률과 현금전환 추이"; chart.hasLegend=true; chart.yAxis={numberFormatCode:"0%"}; chart.setPosition("J4","Q17");
+summary.getRange(`A${chartSourceHeaderRow}:C${chartSourceHeaderRow}`).values = [["연도","영업이익률","영업현금흐름/영업이익"]];
+data.years.forEach((y,i)=>{ const row=chartSourceFirstRow+i, src=excelCol(2+i); summary.getRange(`A${row}:C${row}`).formulas=[[`=${src}$4`,`=${src}$8`,`=${src}$10`]]; });
+const chart = summary.charts.add("line", summary.getRange(`A${chartSourceHeaderRow}:C${chartSourceLastRow}`));
+chart.title="이익률과 현금전환 추이"; chart.hasLegend=true; chart.yAxis={numberFormatCode:"0%"}; chart.setPosition(`E${chartSourceHeaderRow}`,`L${chartSourceHeaderRow+13}`);
 summary.freezePanes.freezeRows(4); widths(summary,{A:28,B:16,C:16,D:16,E:16,F:16,G:3,H:16,I:3,J:16,K:16,L:16,M:16,N:16,O:16,P:16,Q:16});
 
-title(wc, "운전자본 | 회전일수와 순운전자본", "F");
+const wcEndCol = excelCol(Math.max(1 + data.years.length, 10));
+title(wc, "운전자본 | 회전일수와 순운전자본", wcEndCol);
 wc.getRange("A4").values = [["지표"]];
 wc.getRange("A5:A12").values = [["매출액"],["매출채권회전일수"],["재고자산회전일수"],["매입채무회전일수"],["현금전환주기(참고)"],["순운전자본"],["매출 대비 순운전자본"],["매출채권·재고 증가율과 매출 증가율 차이"]];
 wc.getRange(`B4:${lastCol}4`).values=[data.years]; wc.getRange(`B4:${lastCol}4`).format={fill:pale,font:{bold:true},horizontalAlignment:"right"};
-data.years.forEach((_,i)=>{ const c=String.fromCharCode(66+i), src=5+i, prev=String.fromCharCode(65+i);
+data.years.forEach((_,i)=>{ const c=excelCol(2+i), src=5+i, prev=excelCol(1+i);
   wc.getRange(`${c}5:${c}12`).formulas=[[`='원천 자료'!B${src}`],[`=IFERROR(AVERAGE('원천 자료'!F${Math.max(5,src-1)}:'원천 자료'!F${src})/'원천 자료'!B${src}*365,"")`],[`=IFERROR(AVERAGE('원천 자료'!G${Math.max(5,src-1)}:'원천 자료'!G${src})/'원천 자료'!J${src}*365,"")`],[`=IFERROR(AVERAGE('원천 자료'!H${Math.max(5,src-1)}:'원천 자료'!H${src})/'원천 자료'!J${src}*365,"")`],[`=${c}6+${c}7-${c}8`],[`='원천 자료'!F${src}+'원천 자료'!G${src}-'원천 자료'!H${src}`],[`=IFERROR(${c}10/${c}5,"")`],[i?`=IFERROR((('원천 자료'!F${src}+'원천 자료'!G${src})/('원천 자료'!F${src-1}+'원천 자료'!G${src-1})-1)-(${c}5/${prev}5-1),"")`:""]];
 });
 wc.getRange(`B5:${lastCol}5`).format.numberFormat=amountFmt; wc.getRange(`B6:${lastCol}9`).format.numberFormat=daysFmt; wc.getRange(`B10:${lastCol}10`).format.numberFormat=amountFmt; wc.getRange(`B11:${lastCol}12`).format.numberFormat=pctFmt;
-wc.getRange("A14:J14").merge(); wc.getRange("A14").values=[["운전자본 검토 포인트: 매출채권·재고 증가율이 매출 증가율을 크게 초과하거나 현금전환주기가 연속 상승하면 계약조건, 재고 진부화, 매출 인식 시점을 공시 원문과 함께 확인하세요."]]; wc.getRange("A14:J14").format={fill:amber,wrapText:true,rowHeight:32,verticalAlignment:"center"};
+wc.getRange(`A14:${wcEndCol}14`).merge(); wc.getRange("A14").values=[["운전자본 검토 포인트: 매출채권·재고 증가율이 매출 증가율을 크게 초과하거나 현금전환주기가 연속 상승하면 계약조건, 재고 진부화, 매출 인식 시점을 공시 원문과 함께 확인하세요."]]; wc.getRange(`A14:${wcEndCol}14`).format={fill:amber,wrapText:true,rowHeight:32,verticalAlignment:"center"};
 wc.freezePanes.freezeRows(4); widths(wc,{A:36,B:18,C:18,D:18,E:18,F:18,G:16,H:16,I:16,J:16});
 
 title(candidates, "검토 후보 | 정상화 조정 후보 (결론 아님)", "L");
@@ -111,14 +123,15 @@ audit.getRange("A4:J4").values=[["연도","사용 공시","접수일","접수번
 const filingMap=Object.fromEntries((data.filings||[]).map(x=>[x.year,x]));
 audit.getRange(`C5:D${4+data.years.length}`).format.numberFormat="0";
 audit.getRange(`A5:J${4+data.years.length}`).values=data.years.map(y=>{const f=filingMap[y]||{};return[y,f.report_nm||"사업보고서",f.rcept_dt||"",f.rcept_no||"",f.url||"",data.metadata.basis,"원천 자료 시트 참조","각 분석 시트의 셀 수식 참조","예",""];});
-audit.getRange("A11:J11").merge(); audit.getRange("A11").values=[["산식 정의"]]; header(audit.getRange("A11:J11"));
-audit.getRange("A12:B19").values=[["영업이익률","영업이익 / 매출액"],["영업이익 대비 영업현금흐름","영업활동현금흐름 / 영업이익"],["매출채권회전일수","평균 매출채권 / 매출액 × 365"],["재고자산회전일수","평균 재고자산 / 매출원가 × 365"],["매입채무회전일수","평균 매입채무 / 매출원가 × 365"],["순운전자본","매출채권 + 재고자산 - 매입채무"],["순차입금","차입금·사채 + 선택 시 리스부채 - 현금"],["정상화 후보","계정명·원문 키워드 자동 탐지 후 사용자 판단"]];
+const formulaHeaderRow = 6 + data.years.length;
+audit.getRange(`A${formulaHeaderRow}:J${formulaHeaderRow}`).merge(); audit.getRange(`A${formulaHeaderRow}`).values=[["산식 정의"]]; header(audit.getRange(`A${formulaHeaderRow}:J${formulaHeaderRow}`));
+audit.getRange(`A${formulaHeaderRow+1}:B${formulaHeaderRow+8}`).values=[["영업이익률","영업이익 / 매출액"],["영업이익 대비 영업현금흐름","영업활동현금흐름 / 영업이익"],["매출채권회전일수","평균 매출채권 / 매출액 × 365"],["재고자산회전일수","평균 재고자산 / 매출원가 × 365"],["매입채무회전일수","평균 매입채무 / 매출원가 × 365"],["순운전자본","매출채권 + 재고자산 - 매입채무"],["순차입금","차입금·사채 + 선택 시 리스부채 - 현금"],["정상화 후보","계정명·원문 키워드 자동 탐지 후 사용자 판단"]];
 audit.freezePanes.freezeRows(4); widths(audit,{A:9,B:27,C:13,D:18,E:45,F:18,G:26,H:42,I:12,J:35});
 
 title(checks,"검증 | 완전성·산식·한계", "G");
 checks.getRange("A4:G4").values=[["검사항목","실제값","기대값","차이","허용범위","상태","비고"]]; header(checks.getRange("A4:G4"));
 checks.getRange("A5:G9").values=[
-  ["분석기간 수",data.years.length,"3개년 권장",0,0,data.years.length>=2?"정상":"검토 필요","개념검증은 3개 사업연도 권장"],
+  ["분석기간 수",data.years.length,"사용자 설정",0,0,data.years.length>=1?"정상":"검토 필요","선택한 전체 사업연도를 분석"],
   ["연결재무제표",data.metadata.basis,"연결재무제표",0,0,data.metadata.basis.includes("연결")?"정상":"검토 필요","연결 우선 원칙"],
   ["매출 누락",data.metrics.filter(x=>x.revenue==null).length,0,data.metrics.filter(x=>x.revenue==null).length,0,data.metrics.every(x=>x.revenue!=null)?"정상":"검토 필요","원천 자료 확인"],
   ["영업이익 누락",data.metrics.filter(x=>x.operating_profit==null).length,0,data.metrics.filter(x=>x.operating_profit==null).length,0,data.metrics.every(x=>x.operating_profit!=null)?"정상":"검토 필요","원천 자료 확인"],

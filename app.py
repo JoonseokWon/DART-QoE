@@ -816,11 +816,11 @@ class DartQoeApp:
         years.pack(fill="x")
         years.grid_columnconfigure((0, 2), weight=1)
         ttk.Spinbox(
-            years, from_=2015, to=2030, textvariable=self.begin_var, width=8, justify="center"
+            years, from_=2000, to=datetime.now().year, textvariable=self.begin_var, width=8, justify="center"
         ).grid(row=0, column=0, sticky="ew")
         tk.Label(years, text="—", bg=WHITE, fg=MUTED).grid(row=0, column=1, padx=self.px(8))
         ttk.Spinbox(
-            years, from_=2015, to=2030, textvariable=self.end_var, width=8, justify="center"
+            years, from_=2000, to=datetime.now().year, textvariable=self.end_var, width=8, justify="center"
         ).grid(row=0, column=2, sticky="ew")
 
         ttk.Checkbutton(form, text="순차입금에 리스부채 포함", variable=self.lease_var).pack(
@@ -998,8 +998,8 @@ class DartQoeApp:
             end_year = int(self.end_var.get())
             if not api_key or not company:
                 raise ValueError("전자공시 인증키와 회사명을 입력하세요.")
-            if begin_year > end_year or end_year - begin_year > 4:
-                raise ValueError("분석기간은 순서대로 최대 5개년까지 입력하세요.")
+            if begin_year > end_year:
+                raise ValueError("분석 시작연도는 종료연도보다 늦을 수 없습니다.")
             request = (api_key, company, begin_year, end_year, self.lease_var.get(), self.notes_var.get())
             self.pending_api_key = api_key
             self.pending_save_key = self.save_key_var.get()

@@ -320,8 +320,8 @@ def analyze_dart(
         if progress_callback is not None:
             progress_callback(percent, message)
 
-    if end_year - begin_year > 4 or begin_year > end_year:
-        raise ValueError("분석기간은 순서대로 최대 5개년까지 입력하세요.")
+    if begin_year > end_year:
+        raise ValueError("분석 시작연도는 종료연도보다 늦을 수 없습니다.")
     report(4, "회사 정보를 확인하고 있습니다")
     client = DartClient(api_key.strip())
     company = client.resolve_company(company_query)
