@@ -701,14 +701,6 @@ class DartQoeApp:
             fg="#D9E7F3",
             font=("맑은 고딕", 11),
         ).pack(anchor="center", padx=self.px(40))
-        tk.Label(
-            header,
-            text="자동 결론이 아니라 원문 확인 항목과 계산 근거를 제시합니다.",
-            bg=NAVY,
-            fg="#AFC5D8",
-            font=("맑은 고딕", 10),
-        ).pack(anchor="center", padx=self.px(40), pady=(self.px(3), 0))
-
         body = tk.Frame(self.root, bg=BG)
         body.pack(fill="both", expand=True, padx=self.px(28), pady=self.px(22))
         body.grid_columnconfigure(1, weight=1)
@@ -842,6 +834,14 @@ class DartQoeApp:
                 row=row, column=0, sticky="n", padx=(0, self.px(12)), pady=self.px(2))
             tk.Label(notice, text=value, bg=AMBER, fg="#695A20", font=("맑은 고딕", 9)).grid(
                 row=row, column=1, sticky="n", pady=self.px(2))
+
+        tk.Label(
+            form,
+            text="BY JOONSEOK WON",
+            bg=WHITE,
+            fg="#8193A6",
+            font=("맑은 고딕", 10, "bold"),
+        ).pack(side="bottom", fill="both", expand=True, pady=self.px(14))
 
     def _build_result(self, result: tk.Frame) -> None:
         tk.Label(result, text="검토 결과", bg=WHITE, fg=NAVY, font=("맑은 고딕", 18, "bold")).grid(
