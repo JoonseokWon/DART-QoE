@@ -82,6 +82,9 @@ for ($attempt = 0; $attempt -lt 40; $attempt++) {{
     }}
 }}
 if (Test-Path -LiteralPath $current) {{
+    # Give the one-file bootloader time to finish cleaning its previous _MEI
+    # extraction directory before starting the replacement executable.
+    Start-Sleep -Milliseconds 1000
     Start-Process -FilePath $current -WorkingDirectory $working
 }}
 """.strip()
