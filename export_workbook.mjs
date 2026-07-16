@@ -70,13 +70,13 @@ summary.getRange(`B7:${lastCol}7`).format.numberFormat = amountFmt; summary.getR
 summary.getRange(`B9:${lastCol}9`).format.numberFormat = amountFmt; summary.getRange(`B10:${lastCol}10`).format.numberFormat = pctFmt;
 summary.getRange(`B11:${lastCol}13`).format.numberFormat = amountFmt;
 summary.getRange("A7:F7").format.borders = { top: { style:"thin", color:navy } };
-summary.getRange("A15:F15").merge(); summary.getRange("A15").values = [["해석 주의: 영업이익 대비 영업현금흐름 저하, 순이익–영업현금흐름 괴리 확대, 순차입금 증가는 결론이 아니라 추가 질문의 출발점입니다."]]; summary.getRange("A15:F15").format = { fill: amber, wrapText:true };
+summary.getRange("A15:H15").merge(); summary.getRange("A15").values = [["해석 주의: 영업이익 대비 영업현금흐름 저하, 순이익–영업현금흐름 괴리 확대, 순차입금 증가는 결론이 아니라 추가 질문의 출발점입니다."]]; summary.getRange("A15:H15").format = { fill: amber, wrapText:true, rowHeight:30 };
 // Chart helper block uses formulas so source edits flow through.
-summary.getRange("H4:J4").values = [["연도","영업이익률","영업현금흐름/영업이익"]];
-data.years.forEach((y,i)=>{ const row=5+i, src=String.fromCharCode(66+i); summary.getRange(`H${row}:J${row}`).formulas=[[`=${src}$4`,`=${src}$8`,`=${src}$10`]]; });
-const chart = summary.charts.add("line", summary.getRange(`H4:J${4+data.years.length}`));
-chart.title="이익률과 현금전환 추이"; chart.hasLegend=true; chart.yAxis={numberFormatCode:"0%"}; chart.setPosition("H9","O22");
-summary.freezePanes.freezeRows(4); widths(summary,{A:28,B:16,C:16,D:16,E:16,F:16,G:3,H:16,I:16,J:16,K:16,L:16,M:16,N:16,O:16});
+summary.getRange("J4:L4").values = [["연도","영업이익률","영업현금흐름/영업이익"]];
+data.years.forEach((y,i)=>{ const row=5+i, src=String.fromCharCode(66+i); summary.getRange(`J${row}:L${row}`).formulas=[[`=${src}$4`,`=${src}$8`,`=${src}$10`]]; });
+const chart = summary.charts.add("line", summary.getRange(`J4:L${4+data.years.length}`));
+chart.title="이익률과 현금전환 추이"; chart.hasLegend=true; chart.yAxis={numberFormatCode:"0%"}; chart.setPosition("J9","Q22");
+summary.freezePanes.freezeRows(4); widths(summary,{A:28,B:16,C:16,D:16,E:16,F:16,G:3,H:16,I:3,J:16,K:16,L:16,M:16,N:16,O:16,P:16,Q:16});
 
 title(wc, "운전자본 | 회전일수와 순운전자본", "F");
 wc.getRange("A4").values = [["지표"]];
@@ -132,4 +132,4 @@ const xlsx=await SpreadsheetFile.exportXlsx(wb); await xlsx.save(outputPath);
 const inspection=await wb.inspect({kind:"table",range:"'QoE 요약'!A1:F15",include:"values,formulas",tableMaxRows:20,tableMaxCols:8});
 const errors=await wb.inspect({kind:"match",searchTerm:"#REF!|#DIV/0!|#VALUE!|#NAME\\?|#N/A",options:{useRegex:true,maxResults:200},summary:"수식 오류 검사"});
 console.log(inspection.ndjson); console.log(errors.ndjson);
-if(previewDir){await fs.mkdir(previewDir,{recursive:true}); for(const s of ["표지","QoE 요약","운전자본","검토 후보","검토 흔적","검증"]){const blob=await wb.render({sheetName:s,autoCrop:"all",scale:1,format:"png"}); await fs.writeFile(`${previewDir}/${s.replaceAll(" ","_")}.png`,new Uint8Array(await blob.arrayBuffer()));}}
+if(previewDir){await fs.mkdir(previewDir,{recursive:true}); for(const s of ["표지","원천 자료","QoE 요약","운전자본","검토 후보","검토 흔적","검증"]){const blob=await wb.render({sheetName:s,autoCrop:"all",scale:1,format:"png"}); await fs.writeFile(`${previewDir}/${s.replaceAll(" ","_")}.png`,new Uint8Array(await blob.arrayBuffer()));}}
