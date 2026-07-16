@@ -17,8 +17,10 @@ class AutomaticRestartTests(unittest.TestCase):
         command = updater_command(current, update, 1234)
         script = base64.b64decode(command[-1]).decode("utf-16-le")
         self.assertIn("Wait-Process -Id 1234", script)
+        self.assertIn("Get-Process -Name $processName", script)
+        self.assertIn("$remaining.Count -eq 0", script)
         self.assertIn("Copy-Item -LiteralPath", script)
-        self.assertIn("Start-Sleep -Milliseconds 1000", script)
+        self.assertIn("Start-Sleep -Milliseconds 500", script)
         self.assertIn("Start-Process -FilePath $current", script)
         self.assertIn(str(update), script)
 

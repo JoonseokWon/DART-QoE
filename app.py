@@ -79,6 +79,15 @@ $current = {_ps_literal(current_exe)}
 $update = {_ps_literal(update_exe)}
 $working = {_ps_literal(working_dir)}
 Wait-Process -Id {process_id} -ErrorAction SilentlyContinue
+# A PyInstaller one-file app has a parent bootloader process in addition to
+# the Python child process above. Wait for that parent to finish deleting its
+# temporary _MEI directory before replacing and relaunching the executable.
+$processName = [System.IO.Path]::GetFileNameWithoutExtension($current)
+for ($attempt = 0; $attempt -lt 80; $attempt++) {{
+    $remaining = @(Get-Process -Name $processName -ErrorAction SilentlyContinue)
+    if ($remaining.Count -eq 0) {{ break }}
+    Start-Sleep -Milliseconds 250
+}}
 $installed = $false
 for ($attempt = 0; $attempt -lt 40; $attempt++) {{
     try {{
@@ -91,9 +100,7 @@ for ($attempt = 0; $attempt -lt 40; $attempt++) {{
     }}
 }}
 if (Test-Path -LiteralPath $current) {{
-    # Give the one-file bootloader time to finish cleaning its previous _MEI
-    # extraction directory before starting the replacement executable.
-    Start-Sleep -Milliseconds 1000
+    Start-Sleep -Milliseconds 500
     Start-Process -FilePath $current -WorkingDirectory $working
 }}
 """.strip()
