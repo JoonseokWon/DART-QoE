@@ -6,6 +6,7 @@ import sys
 import threading
 import traceback
 import ctypes
+from ctypes import wintypes
 from datetime import datetime
 from pathlib import Path
 import tkinter as tk
@@ -95,6 +96,165 @@ def delete_saved_api_key() -> None:
     API_KEY_FILE.unlink(missing_ok=True)
 
 
+class NativeWindowsEntry:
+    """A native Windows EDIT control embedded in Tk for reliable Korean IME input."""
+
+    WS_CHILD = 0x40000000
+    WS_VISIBLE = 0x10000000
+    WS_TABSTOP = 0x00010000
+    WS_BORDER = 0x00800000
+    ES_AUTOHSCROLL = 0x0080
+    EM_SETPASSWORDCHAR = 0x00CC
+    WM_SETFONT = 0x0030
+
+    def __init__(
+        self,
+        parent: tk.Widget,
+        variable: tk.StringVar,
+        scale: float,
+        *,
+        show: str | None = None,
+    ):
+        self.variable = variable
+        self.scale = scale
+        self._destroyed = False
+        self.container = tk.Frame(parent, bg=WHITE, height=max(34, round(36 * scale)))
+        self.container.pack(fill="x")
+        self.container.pack_propagate(False)
+        self.container.update_idletasks()
+
+        user32 = ctypes.windll.user32
+        kernel32 = ctypes.windll.kernel32
+        gdi32 = ctypes.windll.gdi32
+        user32.CreateWindowExW.argtypes = (
+            wintypes.DWORD,
+            wintypes.LPCWSTR,
+            wintypes.LPCWSTR,
+            wintypes.DWORD,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            wintypes.HWND,
+            wintypes.HMENU,
+            wintypes.HINSTANCE,
+            wintypes.LPVOID,
+        )
+        user32.CreateWindowExW.restype = wintypes.HWND
+        user32.GetWindowTextLengthW.argtypes = (wintypes.HWND,)
+        user32.GetWindowTextLengthW.restype = ctypes.c_int
+        user32.GetWindowTextW.argtypes = (wintypes.HWND, wintypes.LPWSTR, ctypes.c_int)
+        user32.GetWindowTextW.restype = ctypes.c_int
+        user32.SetWindowTextW.argtypes = (wintypes.HWND, wintypes.LPCWSTR)
+        user32.SetWindowTextW.restype = wintypes.BOOL
+        user32.MoveWindow.argtypes = (
+            wintypes.HWND,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            wintypes.BOOL,
+        )
+        user32.IsWindow.argtypes = (wintypes.HWND,)
+        user32.IsWindow.restype = wintypes.BOOL
+        user32.DestroyWindow.argtypes = (wintypes.HWND,)
+        user32.DestroyWindow.restype = wintypes.BOOL
+        user32.SendMessageW.argtypes = (
+            wintypes.HWND,
+            wintypes.UINT,
+            wintypes.WPARAM,
+            wintypes.LPARAM,
+        )
+        user32.SendMessageW.restype = wintypes.LPARAM
+        kernel32.GetModuleHandleW.argtypes = (wintypes.LPCWSTR,)
+        kernel32.GetModuleHandleW.restype = wintypes.HMODULE
+        gdi32.CreateFontW.restype = wintypes.HFONT
+        gdi32.DeleteObject.argtypes = (wintypes.HGDIOBJ,)
+        gdi32.DeleteObject.restype = wintypes.BOOL
+
+        styles = self.WS_CHILD | self.WS_VISIBLE | self.WS_TABSTOP | self.WS_BORDER | self.ES_AUTOHSCROLL
+        self.hwnd = user32.CreateWindowExW(
+            0,
+            "EDIT",
+            variable.get(),
+            styles,
+            0,
+            0,
+            max(1, self.container.winfo_width()),
+            max(1, self.container.winfo_height()),
+            self.container.winfo_id(),
+            None,
+            kernel32.GetModuleHandleW(None),
+            None,
+        )
+        if not self.hwnd:
+            raise ctypes.WinError()
+
+        font_height = -max(16, round(16 * scale))
+        self.font_handle = gdi32.CreateFontW(
+            font_height,
+            0,
+            0,
+            0,
+            400,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            5,
+            0,
+            "Malgun Gothic",
+        )
+        if self.font_handle:
+            user32.SendMessageW(self.hwnd, self.WM_SETFONT, self.font_handle, 1)
+        if show:
+            user32.SendMessageW(self.hwnd, self.EM_SETPASSWORDCHAR, ord(show[0]), 0)
+
+        self.container.bind("<Configure>", self._resize, add="+")
+        self.container.bind("<Destroy>", self._destroy, add="+")
+        self.container.after(80, self._poll)
+
+    def _resize(self, _event: tk.Event | None = None) -> None:
+        if self._destroyed or not ctypes.windll.user32.IsWindow(self.hwnd):
+            return
+        ctypes.windll.user32.MoveWindow(
+            self.hwnd,
+            0,
+            0,
+            max(1, self.container.winfo_width()),
+            max(1, self.container.winfo_height()),
+            True,
+        )
+
+    def sync_from_control(self) -> str:
+        if self._destroyed or not ctypes.windll.user32.IsWindow(self.hwnd):
+            return self.variable.get()
+        length = ctypes.windll.user32.GetWindowTextLengthW(self.hwnd)
+        buffer = ctypes.create_unicode_buffer(length + 1)
+        ctypes.windll.user32.GetWindowTextW(self.hwnd, buffer, length + 1)
+        value = buffer.value
+        if self.variable.get() != value:
+            self.variable.set(value)
+        return value
+
+    def _poll(self) -> None:
+        if self._destroyed:
+            return
+        self.sync_from_control()
+        self.container.after(80, self._poll)
+
+    def _destroy(self, event: tk.Event) -> None:
+        if event.widget is not self.container or self._destroyed:
+            return
+        self._destroyed = True
+        if ctypes.windll.user32.IsWindow(self.hwnd):
+            ctypes.windll.user32.DestroyWindow(self.hwnd)
+        if self.font_handle:
+            ctypes.windll.gdi32.DeleteObject(self.font_handle)
+
+
 def export_excel(data: dict, stem: str) -> Path:
     OUTPUTS.mkdir(exist_ok=True)
     safe = "".join(ch for ch in stem if ch.isalnum() or ch in "-_가-힣") or "qoe"
@@ -136,6 +296,7 @@ class DartQoeApp:
         self.busy = False
         self.pending_api_key = ""
         self.pending_save_key = False
+        self.native_entries: list[NativeWindowsEntry] = []
 
         root.title("DART-QoE | 정상화 이익과 운전자본 검토")
         dpi = max(96.0, float(root.winfo_fpixels("1i")))
@@ -248,8 +409,19 @@ class DartQoeApp:
             anchor="w", pady=(self.px(12), self.px(5))
         )
 
-    def _text_entry(self, parent: tk.Widget, variable: tk.StringVar, *, show: str | None = None) -> tk.Entry:
-        """Create a Windows IME-friendly entry with a stable Korean baseline."""
+    def _text_entry(
+        self,
+        parent: tk.Widget,
+        variable: tk.StringVar,
+        *,
+        show: str | None = None,
+    ) -> NativeWindowsEntry | tk.Entry:
+        """Create a native Windows input control, with a Tk fallback elsewhere."""
+        if sys.platform == "win32":
+            entry = NativeWindowsEntry(parent, variable, self.scale, show=show)
+            self.native_entries.append(entry)
+            return entry
+
         options: dict[str, object] = {
             "textvariable": variable,
             "font": ("맑은 고딕", 10),
@@ -436,6 +608,8 @@ class DartQoeApp:
     def start_analysis(self, demo: bool) -> None:
         if self.busy:
             return
+        for entry in self.native_entries:
+            entry.sync_from_control()
         self.pending_api_key = ""
         self.pending_save_key = False
         try:
