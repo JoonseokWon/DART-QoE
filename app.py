@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import base64
 import subprocess
 import sys
 import threading
@@ -23,6 +24,7 @@ OUTPUTS = ROOT / "outputs"
 CONFIG_DIR = Path(os.environ.get("APPDATA", ROOT)) / "DART-QoE"
 API_KEY_FILE = CONFIG_DIR / "api-key.dat"
 NODE_DEFAULT = Path(r"C:\Users\user\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe")
+WATCHED_SOURCE_FILES = (ROOT / "app.py", ROOT / "qoe.py", ROOT / "export_workbook.mjs")
 
 NAVY = "#112A46"
 BLUE = "#2F5597"
@@ -34,6 +36,59 @@ GREEN = "#2E7D5B"
 AMBER = "#FFF2CC"
 WHITE = "#FFFFFF"
 BG = "#F4F7FA"
+
+
+def source_snapshot(paths: tuple[Path, ...] = WATCHED_SOURCE_FILES) -> tuple[tuple[str, int, int], ...]:
+    """Return a lightweight signature for development hot-reload inputs."""
+    snapshot = []
+    for path in paths:
+        try:
+            stat = path.stat()
+            snapshot.append((str(path), stat.st_mtime_ns, stat.st_size))
+        except OSError:
+            snapshot.append((str(path), 0, 0))
+    return tuple(snapshot)
+
+
+def packaged_update_path(executable: Path | None = None) -> Path:
+    current = executable or Path(sys.executable).resolve()
+    return current.with_name(f"{current.stem}.update{current.suffix}")
+
+
+def _ps_literal(value: Path) -> str:
+    return "'" + str(value).replace("'", "''") + "'"
+
+
+def updater_command(current_exe: Path, update_exe: Path, process_id: int) -> list[str]:
+    """Build a hidden PowerShell helper that installs and relaunches a packaged update."""
+    working_dir = current_exe.parent
+    script = f"""
+$ErrorActionPreference = 'SilentlyContinue'
+$current = {_ps_literal(current_exe)}
+$update = {_ps_literal(update_exe)}
+$working = {_ps_literal(working_dir)}
+Wait-Process -Id {process_id} -ErrorAction SilentlyContinue
+$installed = $false
+for ($attempt = 0; $attempt -lt 40; $attempt++) {{
+    try {{
+        Copy-Item -LiteralPath $update -Destination $current -Force -ErrorAction Stop
+        Remove-Item -LiteralPath $update -Force -ErrorAction SilentlyContinue
+        $installed = $true
+        break
+    }} catch {{
+        Start-Sleep -Milliseconds 250
+    }}
+}}
+if (Test-Path -LiteralPath $current) {{
+    Start-Process -FilePath $current -WorkingDirectory $working
+}}
+""".strip()
+    encoded = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
+    powershell = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe"
+    return [
+        str(powershell), "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden",
+        "-ExecutionPolicy", "Bypass", "-EncodedCommand", encoded,
+    ]
 
 
 def enable_dpi_awareness() -> None:
@@ -304,6 +359,10 @@ class DartQoeApp:
         self.pending_api_key = ""
         self.pending_save_key = False
         self.native_entries: list[NativeWindowsEntry] = []
+        self.restarting = False
+        self._source_snapshot = source_snapshot() if not FROZEN else ()
+        self._update_signature: tuple[int, int] | None = None
+        self._update_stable_polls = 0
 
         root.title("DART-QoE | 정상화 이익과 운전자본 검토")
         dpi = max(96.0, float(root.winfo_fpixels("1i")))
@@ -325,6 +384,7 @@ class DartQoeApp:
         self._set_icon()
         self._configure_styles()
         self._build_ui()
+        self.root.after(1000, self._watch_for_changes)
 
     def px(self, value: int) -> int:
         return max(1, round(value * self.scale))
@@ -347,6 +407,92 @@ class DartQoeApp:
         icon.put(WHITE, to=(9, 23, 18, 26))
         self._icon = icon
         self.root.iconphoto(True, icon)
+
+    def _watch_for_changes(self) -> None:
+        if self.restarting:
+            return
+        if FROZEN:
+            self._watch_for_packaged_update()
+        else:
+            current = source_snapshot()
+            if current != self._source_snapshot:
+                self._source_snapshot = current
+                self._restart_development_app()
+                return
+        self.root.after(1000, self._watch_for_changes)
+
+    def _watch_for_packaged_update(self) -> None:
+        update = packaged_update_path()
+        try:
+            stat = update.stat()
+            signature = (stat.st_mtime_ns, stat.st_size)
+        except OSError:
+            self._update_signature = None
+            self._update_stable_polls = 0
+            return
+
+        if signature == self._update_signature:
+            self._update_stable_polls += 1
+        else:
+            self._update_signature = signature
+            self._update_stable_polls = 0
+
+        if self._update_stable_polls < 2 or stat.st_size < 1_000_000:
+            return
+        try:
+            with update.open("rb") as handle:
+                if handle.read(2) != b"MZ":
+                    return
+        except OSError:
+            return
+        self._install_packaged_update(update)
+
+    def _show_restart_status(self) -> None:
+        self.restarting = True
+        self.status_var.set("소스 수정 감지 · 새 버전으로 자동 재실행합니다")
+        self.status_label.configure(fg=BLUE)
+        self.progress.configure(mode="indeterminate")
+        self.progress.grid()
+        self.progress.start(12)
+        self.run_button.configure(state="disabled")
+        self.demo_button.configure(state="disabled")
+        self.root.update_idletasks()
+
+    def _restart_development_app(self) -> None:
+        self._show_restart_status()
+        command = [sys.executable, str(Path(__file__).resolve()), *sys.argv[1:]]
+
+        def relaunch() -> None:
+            self.root.destroy()
+            subprocess.Popen(
+                command,
+                cwd=ROOT,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                close_fds=True,
+            )
+
+        self.root.after(250, relaunch)
+
+    def _install_packaged_update(self, update: Path) -> None:
+        self._show_restart_status()
+        current = Path(sys.executable).resolve()
+        try:
+            subprocess.Popen(
+                updater_command(current, update, os.getpid()),
+                cwd=current.parent,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                close_fds=True,
+            )
+        except OSError as exc:
+            self.restarting = False
+            self.progress.stop()
+            self.progress.configure(mode="determinate", value=0)
+            self.progress.grid_remove()
+            self.status_var.set(f"자동 업데이트를 시작하지 못했습니다 · {exc}")
+            self.status_label.configure(fg="#B3261E")
+            self.root.after(1000, self._watch_for_changes)
+            return
+        self.root.after(250, self.root.destroy)
 
     def _configure_styles(self) -> None:
         style = ttk.Style(self.root)
