@@ -90,8 +90,8 @@ data.years.forEach((_,i)=>{ const c=String.fromCharCode(66+i), src=5+i, prev=Str
   wc.getRange(`${c}5:${c}12`).formulas=[[`='원천 자료'!B${src}`],[`=IFERROR(AVERAGE('원천 자료'!F${Math.max(5,src-1)}:'원천 자료'!F${src})/'원천 자료'!B${src}*365,"")`],[`=IFERROR(AVERAGE('원천 자료'!G${Math.max(5,src-1)}:'원천 자료'!G${src})/'원천 자료'!J${src}*365,"")`],[`=IFERROR(AVERAGE('원천 자료'!H${Math.max(5,src-1)}:'원천 자료'!H${src})/'원천 자료'!J${src}*365,"")`],[`=${c}6+${c}7-${c}8`],[`='원천 자료'!F${src}+'원천 자료'!G${src}-'원천 자료'!H${src}`],[`=IFERROR(${c}10/${c}5,"")`],[i?`=IFERROR((('원천 자료'!F${src}+'원천 자료'!G${src})/('원천 자료'!F${src-1}+'원천 자료'!G${src-1})-1)-(${c}5/${prev}5-1),"")`:""]];
 });
 wc.getRange(`B5:${lastCol}5`).format.numberFormat=amountFmt; wc.getRange(`B6:${lastCol}9`).format.numberFormat=daysFmt; wc.getRange(`B10:${lastCol}10`).format.numberFormat=amountFmt; wc.getRange(`B11:${lastCol}12`).format.numberFormat=pctFmt;
-wc.getRange("A14:F14").merge(); wc.getRange("A14").values=[["주의 신호 예시: 매출채권·재고 증가율이 매출 증가율을 크게 초과하거나, 현금전환주기가 연속 상승하는 경우 계약조건·재고 진부화·매출 인식 시점을 원문과 함께 확인합니다."]]; wc.getRange("A14:F14").format={fill:amber,wrapText:true};
-wc.freezePanes.freezeRows(4); widths(wc,{A:36,B:18,C:18,D:18,E:18,F:18});
+wc.getRange("A14:J14").merge(); wc.getRange("A14").values=[["주의 신호 예시: 매출채권·재고 증가율이 매출 증가율을 크게 초과하거나, 현금전환주기가 연속 상승하는 경우 계약조건·재고 진부화·매출 인식 시점을 원문과 함께 확인합니다."]]; wc.getRange("A14:J14").format={fill:amber,wrapText:true,rowHeight:32,verticalAlignment:"center"};
+wc.freezePanes.freezeRows(4); widths(wc,{A:36,B:18,C:18,D:18,E:18,F:18,G:16,H:16,I:16,J:16});
 
 title(candidates, "검토 후보 | 정상화 조정 후보 (결론 아님)", "L");
 const candHeaders=["연도","유형","계정/키워드","금액","원문 발췌","접수번호","DART 원문","추출 방식","자동 추출","검토 상태","사용자 조정 여부","조정 사유"];
