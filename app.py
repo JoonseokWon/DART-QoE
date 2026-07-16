@@ -116,6 +116,14 @@ if (Test-Path -LiteralPath $current) {{
     Start-Sleep -Milliseconds 2000
     Remove-Item Env:TCL_LIBRARY -ErrorAction SilentlyContinue
     Remove-Item Env:TK_LIBRARY -ErrorAction SilentlyContinue
+    # The helper inherits PyInstaller's private environment from the old
+    # one-file process. If it is passed to the replacement executable, the
+    # new bootloader can reuse the deleted old _MEI directory and fail to load
+    # python312.dll. Clear it and force a fresh top-level extraction.
+    Get-ChildItem Env: | Where-Object {{ $_.Name -like '_PYI_*' }} | ForEach-Object {{
+        Remove-Item ("Env:" + $_.Name) -ErrorAction SilentlyContinue
+    }}
+    $env:PYINSTALLER_RESET_ENVIRONMENT = '1'
     Start-Process -FilePath $current -WorkingDirectory $working
 }}
 """.strip()
