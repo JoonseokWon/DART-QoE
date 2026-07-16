@@ -10,3 +10,5 @@ build/
 dist/
 *.spec
 *.exe
+*.log
+DART-QoE-smoke.txt

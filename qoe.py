@@ -109,11 +109,24 @@ class DartClient:
         exact = [m for m in matches if q in (m.get("corp_name", "").lower(), m.get("stock_code", "").lower(), m.get("corp_code", "").lower())]
         return (exact or matches)[0]
 
-    def annual_accounts(self, corp_code: str, year: int) -> list[dict[str, Any]]:
-        data = self.json("fnlttSinglAcntAll.json", {
-            "corp_code": corp_code, "bsns_year": year, "reprt_code": "11011", "fs_div": "CFS"
-        })
-        return data.get("list", [])
+    def annual_accounts(self, corp_code: str, year: int) -> tuple[list[dict[str, Any]], str]:
+        params = {"corp_code": corp_code, "bsns_year": year, "reprt_code": "11011"}
+        try:
+            data = self.json("fnlttSinglAcntAll.json", {**params, "fs_div": "CFS"})
+            rows = data.get("list", [])
+            if rows:
+                return rows, "CFS"
+        except DartError as exc:
+            # 013 means that the requested company/year/basis has no data.
+            # Authentication, rate-limit and network errors must remain visible.
+            if not str(exc).startswith("DART 013:"):
+                raise
+
+        data = self.json("fnlttSinglAcntAll.json", {**params, "fs_div": "OFS"})
+        rows = data.get("list", [])
+        if not rows:
+            raise DartError(f"{year}년 연결·별도 재무제표 조회 결과가 없습니다.")
+        return rows, "OFS"
 
     def annual_filing(self, corp_code: str, year: int) -> dict[str, Any] | None:
         data = self.json("list.json", {
@@ -201,7 +214,7 @@ def _note_candidates(text: str, year: int, rcept_no: str) -> list[dict[str, Any]
     return found
 
 
-def build_analysis(company: dict[str, str], rows_by_year: dict[int, list[dict[str, Any]]], filings: list[dict[str, Any]], note_texts: dict[int, str], include_lease: bool) -> dict[str, Any]:
+def build_analysis(company: dict[str, str], rows_by_year: dict[int, list[dict[str, Any]]], filings: list[dict[str, Any]], note_texts: dict[int, str], include_lease: bool, basis_by_year: dict[int, str] | None = None) -> dict[str, Any]:
     filing_by_year = {x["year"]: x for x in filings}
     years = sorted(rows_by_year)
     raw = {}
@@ -240,9 +253,18 @@ def build_analysis(company: dict[str, str], rows_by_year: dict[int, list[dict[st
             "nwc_to_revenue": ((v.get("ar") or 0) + (v.get("inventory") or 0) - (v.get("ap") or 0)) / revenue if revenue else None,
             "net_debt": debt + lease - (v.get("cash") or 0),
         })
+    basis_by_year = basis_by_year or {year: "CFS" for year in years}
+    basis_values = set(basis_by_year.values())
+    if basis_values == {"CFS"}:
+        basis_label = "연결재무제표"
+    elif basis_values == {"OFS"}:
+        basis_label = "별도재무제표 (연결 자료 미제공)"
+    else:
+        basis_label = "연도별 연결·별도 기준 혼합"
     return {
         "metadata": {"company_name": company.get("corp_name", ""), "corp_code": company.get("corp_code", ""),
-                     "stock_code": company.get("stock_code", ""), "basis": "연결재무제표", "unit": "원",
+                     "stock_code": company.get("stock_code", ""), "basis": basis_label,
+                     "basis_by_year": {str(year): basis_by_year[year] for year in years}, "unit": "원",
                      "include_lease": include_lease, "created": date.today().isoformat()},
         "years": years, "metrics": metrics, "candidates": candidates,
         "filings": filings,
@@ -290,10 +312,13 @@ def analyze_dart(api_key: str, company_query: str, begin_year: int, end_year: in
         raise ValueError("분석기간은 순서대로 최대 5개년까지 입력하세요.")
     client = DartClient(api_key.strip())
     company = client.resolve_company(company_query)
-    rows_by_year, filings, note_texts, errors = {}, [], {}, []
+    rows_by_year, basis_by_year, filings, note_texts, errors = {}, {}, [], {}, []
     for year in range(begin_year, end_year + 1):
         try:
-            rows_by_year[year] = client.annual_accounts(company["corp_code"], year)
+            rows, basis = client.annual_accounts(company["corp_code"], year)
+            if rows:
+                rows_by_year[year] = rows
+                basis_by_year[year] = basis
         except Exception as exc:
             errors.append({"year": year, "stage": "재무제표", "message": str(exc)})
             continue
@@ -307,8 +332,9 @@ def analyze_dart(api_key: str, company_query: str, begin_year: int, end_year: in
         except Exception as exc:
             errors.append({"year": year, "stage": "공시 원문", "message": str(exc)})
     if not rows_by_year:
-        raise DartError("분석 가능한 연결 재무제표를 찾지 못했습니다.")
-    result = build_analysis(company, rows_by_year, filings, note_texts, include_lease)
+        detail = " / ".join(f"{item['year']}년: {item['message']}" for item in errors if item["stage"] == "재무제표")
+        raise DartError(f"분석 가능한 연결·별도 재무제표를 찾지 못했습니다. {detail}".strip())
+    result = build_analysis(company, rows_by_year, filings, note_texts, include_lease, basis_by_year)
     result["errors"] = errors
     return result
 

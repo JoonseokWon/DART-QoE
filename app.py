@@ -9,6 +9,7 @@ import ctypes
 from datetime import datetime
 from pathlib import Path
 import tkinter as tk
+from tkinter import font as tkfont
 from tkinter import messagebox, ttk
 
 from qoe import analyze_dart, demo_analysis, save_json
@@ -32,6 +33,20 @@ GREEN = "#2E7D5B"
 AMBER = "#FFF2CC"
 WHITE = "#FFFFFF"
 BG = "#F4F7FA"
+
+
+def enable_dpi_awareness() -> None:
+    """Ask Windows for native-resolution drawing before Tk creates a window."""
+    try:
+        ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))
+    except Exception:
+        try:
+            ctypes.windll.shcore.SetProcessDpiAwareness(2)
+        except Exception:
+            try:
+                ctypes.windll.user32.SetProcessDPIAware()
+            except Exception:
+                pass
 
 
 class DataBlob(ctypes.Structure):
@@ -120,12 +135,28 @@ class DartQoeApp:
         self.pending_save_key = False
 
         root.title("DART-QoE | 정상화 이익과 운전자본 검토")
-        root.geometry("1080x760")
-        root.minsize(940, 680)
+        dpi = max(96.0, float(root.winfo_fpixels("1i")))
+        self.scale = min(2.0, max(1.0, dpi / 96.0))
+        root.tk.call("tk", "scaling", dpi / 72.0)
+        screen_width = root.winfo_screenwidth()
+        screen_height = root.winfo_screenheight()
+        width = min(int(screen_width * 0.82), self.px(1440))
+        height = min(int(screen_height * 0.86), self.px(940))
+        width = max(width, min(self.px(940), int(screen_width * 0.94)))
+        height = max(height, min(self.px(680), int(screen_height * 0.90)))
+        x = max(0, (screen_width - width) // 2)
+        y = max(0, (screen_height - height) // 2)
+        root.geometry(f"{width}x{height}+{x}+{y}")
+        root.minsize(min(self.px(900), int(screen_width * 0.90)),
+                     min(self.px(650), int(screen_height * 0.86)))
         root.configure(bg=BG)
+        root.option_add("*Font", ("맑은 고딕", 10))
         self._set_icon()
         self._configure_styles()
         self._build_ui()
+
+    def px(self, value: int) -> int:
+        return max(1, round(value * self.scale))
 
     def _set_icon(self) -> None:
         icon = tk.PhotoImage(width=32, height=32)
@@ -143,42 +174,50 @@ class DartQoeApp:
             style.theme_use("clam")
         except tk.TclError:
             pass
-        style.configure("TEntry", padding=8, fieldbackground=WHITE, bordercolor=LINE)
-        style.configure("TSpinbox", padding=8, fieldbackground=WHITE, bordercolor=LINE)
-        style.configure("TCheckbutton", background=WHITE, foreground=INK, font=("맑은 고딕", 9))
+        for name in ("TkDefaultFont", "TkTextFont", "TkMenuFont", "TkCaptionFont"):
+            try:
+                tkfont.nametofont(name).configure(family="맑은 고딕", size=10)
+            except tk.TclError:
+                pass
+        style.configure("TEntry", padding=self.px(8), fieldbackground=WHITE, bordercolor=LINE,
+                        font=("맑은 고딕", 10))
+        style.configure("TSpinbox", padding=self.px(8), fieldbackground=WHITE, bordercolor=LINE,
+                        font=("맑은 고딕", 10))
+        style.configure("TCheckbutton", background=WHITE, foreground=INK, font=("맑은 고딕", 10))
         style.map("TCheckbutton", background=[("active", WHITE)])
-        style.configure("Horizontal.TProgressbar", troughcolor=PALE, background=BLUE, bordercolor=PALE)
+        style.configure("Horizontal.TProgressbar", troughcolor=PALE, background=BLUE, bordercolor=PALE,
+                        thickness=self.px(6))
 
     def _build_ui(self) -> None:
-        header = tk.Frame(self.root, bg=NAVY, height=126)
+        header = tk.Frame(self.root, bg=NAVY, height=self.px(148))
         header.pack(fill="x")
         header.pack_propagate(False)
-        tk.Label(header, text="DART-QoE", bg=NAVY, fg=WHITE, font=("맑은 고딕", 25, "bold")).pack(
-            anchor="w", padx=38, pady=(22, 1)
+        tk.Label(header, text="DART-QoE", bg=NAVY, fg=WHITE, font=("맑은 고딕", 28, "bold")).pack(
+            anchor="w", padx=self.px(38), pady=(self.px(20), self.px(2))
         )
         tk.Label(
             header,
             text="정상화 이익 후보 · 운전자본 · 현금전환을 함께 보는 거래 검토 보조 도구",
             bg=NAVY,
             fg="#D9E7F3",
-            font=("맑은 고딕", 10),
-        ).pack(anchor="w", padx=40)
+            font=("맑은 고딕", 11),
+        ).pack(anchor="w", padx=self.px(40))
         tk.Label(
             header,
             text="자동 결론이 아니라 원문 확인 항목과 계산 근거를 제시합니다.",
             bg=NAVY,
             fg="#AFC5D8",
-            font=("맑은 고딕", 9),
-        ).pack(anchor="w", padx=40, pady=(3, 0))
+            font=("맑은 고딕", 10),
+        ).pack(anchor="w", padx=self.px(40), pady=(self.px(3), 0))
 
         body = tk.Frame(self.root, bg=BG)
-        body.pack(fill="both", expand=True, padx=28, pady=22)
+        body.pack(fill="both", expand=True, padx=self.px(28), pady=self.px(22))
         body.grid_columnconfigure(1, weight=1)
         body.grid_rowconfigure(0, weight=1)
 
         form = self._card(body)
-        form.grid(row=0, column=0, sticky="ns", padx=(0, 18))
-        form.configure(width=350)
+        form.grid(row=0, column=0, sticky="ns", padx=(0, self.px(18)))
+        form.configure(width=self.px(390))
         form.grid_propagate(False)
         self._build_form(form)
 
@@ -188,26 +227,26 @@ class DartQoeApp:
         result.grid_rowconfigure(4, weight=1)
         self._build_result(result)
 
-    @staticmethod
-    def _card(parent: tk.Widget) -> tk.Frame:
-        return tk.Frame(parent, bg=WHITE, highlightbackground=LINE, highlightthickness=1, padx=24, pady=21)
+    def _card(self, parent: tk.Widget) -> tk.Frame:
+        return tk.Frame(parent, bg=WHITE, highlightbackground=LINE, highlightthickness=1,
+                        padx=self.px(24), pady=self.px(21))
 
     def _field_label(self, parent: tk.Widget, text: str) -> None:
-        tk.Label(parent, text=text, bg=WHITE, fg=INK, font=("맑은 고딕", 9, "bold")).pack(
-            anchor="w", pady=(12, 5)
+        tk.Label(parent, text=text, bg=WHITE, fg=INK, font=("맑은 고딕", 10, "bold")).pack(
+            anchor="w", pady=(self.px(12), self.px(5))
         )
 
     def _build_form(self, form: tk.Frame) -> None:
-        tk.Label(form, text="분석 조건", bg=WHITE, fg=NAVY, font=("맑은 고딕", 16, "bold")).pack(anchor="w")
+        tk.Label(form, text="분석 조건", bg=WHITE, fg=NAVY, font=("맑은 고딕", 18, "bold")).pack(anchor="w")
         tk.Label(
             form,
             text="연결재무제표를 우선하여 최근 사업연도를 분석합니다.",
             bg=WHITE,
             fg=MUTED,
-            font=("맑은 고딕", 9),
-            wraplength=295,
+            font=("맑은 고딕", 10),
+            wraplength=self.px(330),
             justify="left",
-        ).pack(anchor="w", pady=(4, 7))
+        ).pack(anchor="w", pady=(self.px(4), self.px(7)))
 
         saved_api_key = load_saved_api_key()
         self.api_var = tk.StringVar(value=saved_api_key)
@@ -225,7 +264,7 @@ class DartQoeApp:
             text="이 PC에 암호화하여 저장",
             variable=self.save_key_var,
             command=self._storage_preference_changed,
-        ).pack(anchor="w", pady=(7, 0))
+        ).pack(anchor="w", pady=(self.px(7), 0))
         self._field_label(form, "회사명 또는 종목코드")
         ttk.Entry(form, textvariable=self.company_var).pack(fill="x")
         self._field_label(form, "분석기간")
@@ -233,11 +272,13 @@ class DartQoeApp:
         years.pack(fill="x")
         years.grid_columnconfigure((0, 2), weight=1)
         ttk.Spinbox(years, from_=2015, to=2030, textvariable=self.begin_var, width=8).grid(row=0, column=0, sticky="ew")
-        tk.Label(years, text="—", bg=WHITE, fg=MUTED).grid(row=0, column=1, padx=8)
+        tk.Label(years, text="—", bg=WHITE, fg=MUTED).grid(row=0, column=1, padx=self.px(8))
         ttk.Spinbox(years, from_=2015, to=2030, textvariable=self.end_var, width=8).grid(row=0, column=2, sticky="ew")
 
-        ttk.Checkbutton(form, text="순차입금에 리스부채 포함", variable=self.lease_var).pack(anchor="w", pady=(16, 4))
-        ttk.Checkbutton(form, text="사업보고서 원문에서 후보 탐색", variable=self.notes_var).pack(anchor="w", pady=4)
+        ttk.Checkbutton(form, text="순차입금에 리스부채 포함", variable=self.lease_var).pack(
+            anchor="w", pady=(self.px(16), self.px(4)))
+        ttk.Checkbutton(form, text="사업보고서 원문에서 후보 탐색", variable=self.notes_var).pack(
+            anchor="w", pady=self.px(4))
 
         self.run_button = tk.Button(
             form,
@@ -249,10 +290,10 @@ class DartQoeApp:
             activeforeground=WHITE,
             relief="flat",
             cursor="hand2",
-            font=("맑은 고딕", 10, "bold"),
-            pady=11,
+            font=("맑은 고딕", 11, "bold"),
+            pady=self.px(11),
         )
-        self.run_button.pack(fill="x", pady=(21, 8))
+        self.run_button.pack(fill="x", pady=(self.px(21), self.px(8)))
         self.demo_button = tk.Button(
             form,
             text="API 키 없이 데모 생성",
@@ -262,43 +303,44 @@ class DartQoeApp:
             activebackground="#DDE8F3",
             relief="flat",
             cursor="hand2",
-            font=("맑은 고딕", 9, "bold"),
-            pady=9,
+            font=("맑은 고딕", 10, "bold"),
+            pady=self.px(9),
         )
         self.demo_button.pack(fill="x")
 
-        notice = tk.Frame(form, bg=AMBER, padx=12, pady=10)
+        notice = tk.Frame(form, bg=AMBER, padx=self.px(12), pady=self.px(10))
         notice.pack(fill="x", side="bottom")
-        tk.Label(
-            notice,
-            text="API 키는 Windows 계정으로 암호화됩니다.\n데모 숫자는 기능 설명용입니다.",
-            bg=AMBER,
-            fg="#695A20",
-            font=("맑은 고딕", 8),
-            justify="left",
-        ).pack(anchor="w")
+        notice.grid_columnconfigure(1, weight=1)
+        for row, (label, value) in enumerate((
+            ("API 키", "Windows 계정으로 암호화 저장"),
+            ("데모 데이터", "기능 설명용 샘플"),
+        )):
+            tk.Label(notice, text=label, bg=AMBER, fg="#695A20", font=("맑은 고딕", 9, "bold")).grid(
+                row=row, column=0, sticky="nw", padx=(0, self.px(12)), pady=self.px(2))
+            tk.Label(notice, text=value, bg=AMBER, fg="#695A20", font=("맑은 고딕", 9)).grid(
+                row=row, column=1, sticky="nw", pady=self.px(2))
 
     def _build_result(self, result: tk.Frame) -> None:
-        tk.Label(result, text="검토 결과", bg=WHITE, fg=NAVY, font=("맑은 고딕", 16, "bold")).grid(
+        tk.Label(result, text="검토 결과", bg=WHITE, fg=NAVY, font=("맑은 고딕", 18, "bold")).grid(
             row=0, column=0, sticky="w"
         )
         self.status_var = tk.StringVar(value="준비됨")
         self.status_label = tk.Label(
-            result, textvariable=self.status_var, bg=WHITE, fg=GREEN, font=("맑은 고딕", 9, "bold")
+            result, textvariable=self.status_var, bg=WHITE, fg=GREEN, font=("맑은 고딕", 10, "bold")
         )
-        self.status_label.grid(row=1, column=0, sticky="w", pady=(5, 11))
+        self.status_label.configure(anchor="w", justify="left", wraplength=self.px(650))
+        self.status_label.grid(row=1, column=0, sticky="ew", pady=(self.px(5), self.px(11)))
         self.progress = ttk.Progressbar(result, mode="indeterminate")
-        self.progress.grid(row=2, column=0, sticky="ew", pady=(0, 17))
+        self.progress.grid(row=2, column=0, sticky="ew", pady=(0, self.px(17)))
+        self.progress.grid_remove()
 
-        checks = tk.Frame(result, bg=PALE, padx=16, pady=13)
-        checks.grid(row=3, column=0, sticky="ew", pady=(0, 15))
-        tk.Label(
-            checks,
-            text="보고이익  ·  현금전환  ·  운전자본  ·  순차입금  ·  정상화 조정 후보",
-            bg=PALE,
-            fg=NAVY,
-            font=("맑은 고딕", 9, "bold"),
-        ).pack(anchor="w")
+        checks = tk.Frame(result, bg=PALE, padx=self.px(12), pady=self.px(9))
+        checks.grid(row=3, column=0, sticky="ew", pady=(0, self.px(15)))
+        for column in range(3):
+            checks.grid_columnconfigure(column, weight=1, uniform="checks")
+        for index, text in enumerate(("보고이익", "현금전환", "운전자본", "순차입금", "정상화 조정 후보")):
+            tk.Label(checks, text=text, bg=PALE, fg=NAVY, font=("맑은 고딕", 9, "bold"),
+                     anchor="w").grid(row=index // 3, column=index % 3, sticky="ew", padx=self.px(4), pady=self.px(3))
 
         self.summary = tk.Text(
             result,
@@ -307,9 +349,9 @@ class DartQoeApp:
             relief="flat",
             highlightbackground=LINE,
             highlightthickness=1,
-            padx=18,
-            pady=16,
-            font=("맑은 고딕", 10),
+            padx=self.px(18),
+            pady=self.px(16),
+            font=("맑은 고딕", 11),
             wrap="word",
             cursor="arrow",
         )
@@ -321,7 +363,7 @@ class DartQoeApp:
         )
 
         actions = tk.Frame(result, bg=WHITE)
-        actions.grid(row=5, column=0, sticky="ew", pady=(15, 0))
+        actions.grid(row=5, column=0, sticky="ew", pady=(self.px(15), 0))
         self.open_button = tk.Button(
             actions,
             text="Excel 열기",
@@ -332,8 +374,8 @@ class DartQoeApp:
             disabledforeground="#AAB4BE",
             relief="flat",
             font=("맑은 고딕", 9, "bold"),
-            padx=18,
-            pady=9,
+            padx=self.px(18),
+            pady=self.px(9),
         )
         self.open_button.pack(side="left")
         self.folder_button = tk.Button(
@@ -344,15 +386,17 @@ class DartQoeApp:
             fg=NAVY,
             relief="flat",
             font=("맑은 고딕", 9, "bold"),
-            padx=18,
-            pady=9,
+            padx=self.px(18),
+            pady=self.px(9),
         )
-        self.folder_button.pack(side="left", padx=8)
+        self.folder_button.pack(side="left", padx=self.px(8))
 
     def _set_summary(self, text: str) -> None:
         self.summary.configure(state="normal")
         self.summary.delete("1.0", "end")
         self.summary.insert("1.0", text)
+        self.summary.tag_add("body", "1.0", "end")
+        self.summary.tag_configure("body", spacing1=self.px(2), spacing3=self.px(5))
         self.summary.configure(state="disabled")
 
     def start_analysis(self, demo: bool) -> None:
@@ -379,6 +423,15 @@ class DartQoeApp:
             messagebox.showwarning("입력 확인", str(exc), parent=self.root)
             return
 
+        if self.pending_api_key:
+            try:
+                if self.pending_save_key:
+                    save_api_key(self.pending_api_key)
+                else:
+                    delete_saved_api_key()
+            except OSError as exc:
+                messagebox.showwarning("API 키 저장", f"API 키를 저장하지 못했습니다.\n{exc}", parent=self.root)
+
         self.busy = True
         self.run_button.configure(state="disabled")
         self.demo_button.configure(state="disabled")
@@ -386,6 +439,7 @@ class DartQoeApp:
         self.status_var.set("분석 중 · 실제 공시 원문 수집은 수 분 걸릴 수 있습니다")
         self.status_label.configure(fg=BLUE)
         self._set_summary("DART 공시와 원문 주석을 수집하고 계산 근거를 구성하고 있습니다.\n창을 닫지 말고 잠시 기다려 주세요.")
+        self.progress.grid()
         self.progress.start(10)
         threading.Thread(target=self._worker, args=(demo, request), daemon=True).start()
 
@@ -410,14 +464,6 @@ class DartQoeApp:
 
     def _finish_success(self, data: dict, output: Path) -> None:
         self._set_idle()
-        if self.pending_api_key:
-            if self.pending_save_key:
-                try:
-                    save_api_key(self.pending_api_key)
-                except OSError as exc:
-                    messagebox.showwarning("API 키 저장", f"API 키를 저장하지 못했습니다.\n{exc}", parent=self.root)
-            else:
-                delete_saved_api_key()
         self.last_output = output
         metadata = data.get("metadata", {})
         years = data.get("years", [])
@@ -428,6 +474,7 @@ class DartQoeApp:
         self._set_summary(
             f"회사\n{metadata.get('company_name', '-')}\n\n"
             f"분석기간\n{', '.join(map(str, years)) or '-'}\n\n"
+            f"재무제표 기준\n{metadata.get('basis', '-')}\n\n"
             f"정상화 조정 검토 후보\n{len(candidates)}건\n\n"
             f"추출 오류 또는 제한사항\n{len(errors)}건\n\n"
             f"저장 위치\n{output}"
@@ -444,6 +491,8 @@ class DartQoeApp:
     def _set_idle(self) -> None:
         self.busy = False
         self.progress.stop()
+        self.progress.configure(value=0)
+        self.progress.grid_remove()
         self.run_button.configure(state="normal")
         self.demo_button.configure(state="normal")
 
@@ -471,6 +520,7 @@ def smoke_test() -> int:
 def main() -> int:
     if "--smoke-test" in sys.argv:
         return smoke_test()
+    enable_dpi_awareness()
     root = tk.Tk()
     DartQoeApp(root)
     root.mainloop()
