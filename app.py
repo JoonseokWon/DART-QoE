@@ -124,7 +124,7 @@ if (Test-Path -LiteralPath $current) {{
         Remove-Item ("Env:" + $_.Name) -ErrorAction SilentlyContinue
     }}
     $env:PYINSTALLER_RESET_ENVIRONMENT = '1'
-    Start-Process -FilePath $current -WorkingDirectory $working
+    Start-Process -FilePath $current -WorkingDirectory $working -UseNewEnvironment
 }}
 """.strip()
     encoded = base64.b64encode(script.encode("utf-16-le")).decode("ascii")

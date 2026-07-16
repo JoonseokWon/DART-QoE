@@ -27,7 +27,7 @@ class AutomaticRestartTests(unittest.TestCase):
         self.assertIn("Remove-Item Env:TK_LIBRARY", script)
         self.assertIn("$_.Name -like '_PYI_*'", script)
         self.assertIn("$env:PYINSTALLER_RESET_ENVIRONMENT = '1'", script)
-        self.assertIn("Start-Process -FilePath $current", script)
+        self.assertIn("Start-Process -FilePath $current -WorkingDirectory $working -UseNewEnvironment", script)
         self.assertIn(str(update), script)
 
 
