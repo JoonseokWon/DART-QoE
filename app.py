@@ -698,19 +698,26 @@ class DartQoeApp:
                         thickness=self.px(6))
 
     def _build_ui(self) -> None:
-        header = tk.Frame(self.root, bg=NAVY, height=self.px(148))
+        header = tk.Frame(self.root, bg=NAVY, height=self.px(112))
         header.pack(fill="x")
         header.pack_propagate(False)
-        tk.Label(header, text="DART-QoE", bg=NAVY, fg=WHITE, font=("맑은 고딕", 28, "bold")).pack(
-            anchor="center", padx=self.px(38), pady=(self.px(20), self.px(2))
-        )
+
+        header_content = tk.Frame(header, bg=NAVY)
+        header_content.place(relx=0.5, rely=0.5, anchor="center")
         tk.Label(
-            header,
+            header_content,
+            text="DART-QoE",
+            bg=NAVY,
+            fg=WHITE,
+            font=("맑은 고딕", 25, "bold"),
+        ).pack()
+        tk.Label(
+            header_content,
             text="정상화 이익 후보 · 운전자본 · 현금전환을 함께 보는 거래 검토 보조 도구",
             bg=NAVY,
             fg="#D9E7F3",
-            font=("맑은 고딕", 11),
-        ).pack(anchor="center", padx=self.px(40))
+            font=("맑은 고딕", 10),
+        ).pack(pady=(self.px(3), 0))
         body = tk.Frame(self.root, bg=BG)
         body.pack(fill="both", expand=True, padx=self.px(28), pady=self.px(22))
         body.grid_columnconfigure(1, weight=1)
@@ -845,13 +852,38 @@ class DartQoeApp:
             tk.Label(notice, text=value, bg=AMBER, fg="#695A20", font=("맑은 고딕", 9)).grid(
                 row=row, column=1, sticky="n", pady=self.px(2))
 
+        signature = tk.Frame(form, bg=WHITE)
+        signature.pack(side="bottom", fill="both", expand=True)
+        signature_content = tk.Frame(signature, bg=WHITE)
+        signature_content.place(relx=0.5, rely=0.5, anchor="center")
+
+        branded_icon = BUNDLE_ROOT / "assets" / "DART-QoE.png"
+        if branded_icon.exists():
+            try:
+                icon = tk.PhotoImage(file=branded_icon)
+                target = self.px(46)
+                divisor = max(1, min(icon.width(), icon.height()) // target)
+                self._footer_icon = icon.subsample(divisor, divisor)
+                tk.Label(signature_content, image=self._footer_icon, bg=WHITE).pack(
+                    pady=(0, self.px(8))
+                )
+            except tk.TclError:
+                pass
+
         tk.Label(
-            form,
+            signature_content,
             text="BY JOONSEOK WON",
             bg=WHITE,
-            fg="#8193A6",
+            fg=NAVY,
             font=("맑은 고딕", 10, "bold"),
-        ).pack(side="bottom", fill="both", expand=True, pady=self.px(14))
+        ).pack()
+        tk.Label(
+            signature_content,
+            text="DISCLOSURE-BASED QoE REVIEW TOOL",
+            bg=WHITE,
+            fg="#8193A6",
+            font=("맑은 고딕", 8),
+        ).pack(pady=(self.px(3), 0))
 
     def _build_result(self, result: tk.Frame) -> None:
         tk.Label(result, text="검토 결과", bg=WHITE, fg=NAVY, font=("맑은 고딕", 18, "bold")).grid(
