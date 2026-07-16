@@ -102,7 +102,7 @@ def export_excel(data: dict, stem: str) -> Path:
     bundled_node = BUNDLE_ROOT / "node" / "node.exe"
     node = Path(os.environ.get("DART_QOE_NODE", bundled_node if FROZEN else NODE_DEFAULT))
     if not node.exists():
-        raise RuntimeError("Excel 생성 모듈을 찾지 못했습니다. 실행파일을 다시 내려받아 주세요.")
+        raise RuntimeError("엑셀 생성 모듈을 찾지 못했습니다. 실행파일을 다시 내려받아 주세요.")
     env = os.environ.copy()
     default_node_path = BUNDLE_ROOT / "node_modules" if FROZEN else Path(
         r"C:\Users\user\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\node_modules"
@@ -266,7 +266,7 @@ class DartQoeApp:
         self.lease_var = tk.BooleanVar(value=True)
         self.notes_var = tk.BooleanVar(value=True)
 
-        self._field_label(form, "OpenDART API 키")
+        self._field_label(form, "전자공시 인증키")
         ttk.Entry(form, textvariable=self.api_var, show="●").pack(fill="x")
         ttk.Checkbutton(
             form,
@@ -291,7 +291,7 @@ class DartQoeApp:
 
         self.run_button = tk.Button(
             form,
-            text="분석 및 Excel 생성",
+            text="분석 및 엑셀 생성",
             command=lambda: self.start_analysis(False),
             bg=BLUE,
             fg=WHITE,
@@ -305,7 +305,7 @@ class DartQoeApp:
         self.run_button.pack(fill="x", pady=(self.px(21), self.px(8)))
         self.demo_button = tk.Button(
             form,
-            text="API 키 없이 데모 생성",
+            text="인증키 없이 데모 생성",
             command=lambda: self.start_analysis(True),
             bg=PALE,
             fg=NAVY,
@@ -321,7 +321,7 @@ class DartQoeApp:
         notice.pack(fill="x", side="bottom")
         notice.grid_columnconfigure(1, weight=1)
         for row, (label, value) in enumerate((
-            ("API 키", "Windows 계정으로 암호화 저장"),
+            ("인증키", "윈도우 계정으로 암호화 저장"),
             ("데모 데이터", "기능 설명용 샘플"),
         )):
             tk.Label(notice, text=label, bg=AMBER, fg="#695A20", font=("맑은 고딕", 9, "bold")).grid(
@@ -367,15 +367,15 @@ class DartQoeApp:
         self.summary.grid(row=4, column=0, sticky="nsew")
         self._set_summary(
             "분석을 실행하면 이곳에 결과 요약이 표시됩니다.\n\n"
-            "Excel에는 Source Data, QoE Summary, Working Capital, Review Candidates, "
-            "Audit Trail, Checks 시트가 생성됩니다."
+            "엑셀에는 원천 자료, QoE 요약, 운전자본, 검토 후보, 검토 흔적, "
+            "검증 시트가 생성됩니다."
         )
 
         actions = tk.Frame(result, bg=WHITE)
         actions.grid(row=5, column=0, sticky="ew", pady=(self.px(15), 0))
         self.open_button = tk.Button(
             actions,
-            text="Excel 열기",
+            text="엑셀 열기",
             command=self.open_excel,
             state="disabled",
             bg=GREEN,
@@ -422,7 +422,7 @@ class DartQoeApp:
                 begin_year = int(self.begin_var.get())
                 end_year = int(self.end_var.get())
                 if not api_key or not company:
-                    raise ValueError("OpenDART API 키와 회사명을 입력하세요.")
+                    raise ValueError("전자공시 인증키와 회사명을 입력하세요.")
                 if begin_year > end_year or end_year - begin_year > 4:
                     raise ValueError("분석기간은 순서대로 최대 5개년까지 입력하세요.")
                 request = (api_key, company, begin_year, end_year, self.lease_var.get(), self.notes_var.get())
@@ -439,7 +439,7 @@ class DartQoeApp:
                 else:
                     delete_saved_api_key()
             except OSError as exc:
-                messagebox.showwarning("API 키 저장", f"API 키를 저장하지 못했습니다.\n{exc}", parent=self.root)
+                messagebox.showwarning("인증키 저장", f"인증키를 저장하지 못했습니다.\n{exc}", parent=self.root)
 
         self.busy = True
         self.run_button.configure(state="disabled")
@@ -478,7 +478,7 @@ class DartQoeApp:
         years = data.get("years", [])
         candidates = data.get("candidates", [])
         errors = data.get("errors", [])
-        self.status_var.set("완료 · Excel 검토 파일이 생성되었습니다")
+        self.status_var.set("완료 · 엑셀 검토 파일이 생성되었습니다")
         self.status_label.configure(fg=GREEN)
         self._set_summary(
             f"회사\n{metadata.get('company_name', '-')}\n\n"
@@ -509,7 +509,7 @@ class DartQoeApp:
         if self.last_output and self.last_output.exists():
             os.startfile(self.last_output)
         else:
-            messagebox.showinfo("파일 확인", "생성된 Excel 파일을 찾지 못했습니다.", parent=self.root)
+            messagebox.showinfo("파일 확인", "생성된 엑셀 파일을 찾지 못했습니다.", parent=self.root)
 
     def open_folder(self) -> None:
         OUTPUTS.mkdir(exist_ok=True)

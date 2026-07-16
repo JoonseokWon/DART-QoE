@@ -269,7 +269,7 @@ def build_analysis(company: dict[str, str], rows_by_year: dict[int, list[dict[st
         "years": years, "metrics": metrics, "candidates": candidates,
         "filings": filings,
         "limitations": ["자동 탐지 결과는 정상화 조정 확정값이 아닙니다.", "계정명·키워드 후보는 원문 주석 및 경영진 설명과 대조해야 합니다.",
-                        "회전일수는 기초 비교값이 없을 때 기말잔액을 사용합니다.", "EBITDA 배수는 D&A 신뢰성 확보 전까지 MVP에서 제외했습니다."],
+                        "회전일수는 기초 비교값이 없을 때 기말잔액을 사용합니다.", "상각전영업이익 배수는 감가상각비·무형자산상각비의 신뢰성 확보 전까지 개념검증 범위에서 제외했습니다."],
     }
 
 
