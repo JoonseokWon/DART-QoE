@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import os
 import base64
+import math
 import subprocess
 import sys
 import threading
 import traceback
 import ctypes
 from ctypes import wintypes
+from collections import Counter
 from datetime import datetime
 from pathlib import Path
 import tkinter as tk
@@ -89,6 +91,112 @@ if (Test-Path -LiteralPath $current) {{
         str(powershell), "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden",
         "-ExecutionPolicy", "Bypass", "-EncodedCommand", encoded,
     ]
+
+
+def _metric_value(metric: dict, key: str) -> float | None:
+    value = metric.get(key)
+    if isinstance(value, (int, float)) and math.isfinite(value):
+        return float(value)
+    return None
+
+
+def _format_amount(value: float | None) -> str:
+    if value is None:
+        return "확인 불가"
+    absolute = abs(value)
+    if absolute >= 1_000_000_000_000:
+        return f"{value / 1_000_000_000_000:,.2f}조원"
+    if absolute >= 100_000_000:
+        return f"{value / 100_000_000:,.1f}억원"
+    return f"{value:,.0f}원"
+
+
+def _format_percent(value: float | None) -> str:
+    return "확인 불가" if value is None else f"{value:.1%}"
+
+
+def build_result_summary(data: dict) -> str:
+    """Create a compact, decision-oriented screen summary; details stay in Excel."""
+    metadata = data.get("metadata", {})
+    metrics = sorted(data.get("metrics", []), key=lambda item: item.get("year", 0))
+    candidates = data.get("candidates", []) or []
+    errors = data.get("errors", []) or []
+    company = metadata.get("company_name", "-")
+    basis = metadata.get("basis", "-")
+
+    if not metrics:
+        return (
+            f"{company} · QoE 검토 요약\n\n"
+            "[분석 결과]\n"
+            "요약 가능한 재무지표가 없습니다. Excel의 원천 자료와 검증 시트를 확인하세요."
+        )
+
+    first, latest = metrics[0], metrics[-1]
+    first_year, latest_year = first.get("year", "-"), latest.get("year", "-")
+    first_revenue = _metric_value(first, "revenue")
+    latest_revenue = _metric_value(latest, "revenue")
+    year_gap = latest.get("year", 0) - first.get("year", 0)
+    cagr = None
+    if first_revenue and latest_revenue is not None and latest_revenue >= 0 and year_gap > 0:
+        cagr = (latest_revenue / first_revenue) ** (1 / year_gap) - 1
+
+    first_margin = _metric_value(first, "operating_margin")
+    latest_margin = _metric_value(latest, "operating_margin")
+    margin_change = latest_margin - first_margin if latest_margin is not None and first_margin is not None else None
+    cash_conversion = _metric_value(latest, "cfo_to_operating_profit")
+    latest_nwc_ratio = _metric_value(latest, "nwc_to_revenue")
+    previous_nwc_ratio = _metric_value(metrics[-2], "nwc_to_revenue") if len(metrics) > 1 else None
+    nwc_change = latest_nwc_ratio - previous_nwc_ratio if latest_nwc_ratio is not None and previous_nwc_ratio is not None else None
+    latest_net_debt = _metric_value(latest, "net_debt")
+    first_net_debt = _metric_value(first, "net_debt")
+
+    if latest_net_debt is None:
+        debt_text = "확인 불가"
+    elif latest_net_debt < 0:
+        debt_text = f"순현금 {_format_amount(abs(latest_net_debt))}"
+    else:
+        debt_text = f"순차입금 {_format_amount(latest_net_debt)}"
+
+    category_counts = Counter(item.get("category", "기타") for item in candidates)
+    top_categories = ", ".join(f"{name} {count}건" for name, count in category_counts.most_common(3))
+    candidate_text = f"{len(candidates)}건" + (f" · {top_categories}" if top_categories else "")
+
+    review_points = []
+    if cash_conversion is not None and cash_conversion < 0.8:
+        review_points.append(f"최근 영업현금 전환율이 {_format_percent(cash_conversion)}로 낮아 현금화 원인을 확인하세요.")
+    if nwc_change is not None and nwc_change > 0.02:
+        review_points.append(f"매출 대비 순운전자본이 전년보다 {nwc_change * 100:.1f}%p 상승했습니다.")
+    if latest_net_debt is not None and first_net_debt is not None and latest_net_debt > first_net_debt:
+        review_points.append(f"순차입금이 분석 첫해보다 {_format_amount(latest_net_debt - first_net_debt)} 증가했습니다.")
+    if candidates:
+        review_points.append("조정 후보는 확정 조정이 아니므로 금액·반복 여부·원문 맥락을 확인하세요.")
+    if not review_points:
+        review_points.append("자동 지표에서 뚜렷한 추가 확인 신호는 없지만 원문과 계산 근거 검토는 필요합니다.")
+
+    error_text = "없음" if not errors else f"{len(errors)}건"
+    lines = [
+        f"{company} · QoE 검토 요약",
+        "",
+        "[분석 개요]",
+        f"• 기간: {first_year}~{latest_year} · {basis}",
+        f"• 추출 오류 또는 제한사항: {error_text}",
+        "",
+        "[핵심 지표]",
+        f"• 매출: {_format_amount(first_revenue)} → {_format_amount(latest_revenue)} · 연평균 성장률 {_format_percent(cagr)}",
+        f"• 영업이익률: {_format_percent(first_margin)} → {_format_percent(latest_margin)}"
+        + (f" · {margin_change * 100:+.1f}%p" if margin_change is not None else ""),
+        f"• 최근 영업현금 전환율: {_format_percent(cash_conversion)}",
+        f"• 매출 대비 순운전자본: {_format_percent(latest_nwc_ratio)}"
+        + (f" · 전년 대비 {nwc_change * 100:+.1f}%p" if nwc_change is not None else ""),
+        f"• 자금 상태: {debt_text}",
+        f"• 정상화 조정 검토 후보: {candidate_text}",
+        "",
+        "[추가 확인 포인트]",
+        *[f"• {point}" for point in review_points[:3]],
+        "",
+        "세부 계정, 계산식, 공시 원문과 사용자 조정란은 Excel에서 확인하세요.",
+    ]
+    return "\n".join(lines)
 
 
 def enable_dpi_awareness() -> None:
@@ -739,6 +847,18 @@ class DartQoeApp:
         self.summary.insert("1.0", text)
         self.summary.tag_add("body", "1.0", "end")
         self.summary.tag_configure("body", spacing1=self.px(2), spacing3=self.px(5))
+        for line_number, line in enumerate(text.splitlines(), start=1):
+            start = f"{line_number}.0"
+            end = f"{line_number}.end"
+            if line_number == 1:
+                self.summary.tag_add("summary_title", start, end)
+            elif line.startswith("[") and line.endswith("]"):
+                self.summary.tag_add("summary_heading", start, end)
+            elif line.startswith("•"):
+                self.summary.tag_add("summary_bullet", start, end)
+        self.summary.tag_configure("summary_title", font=("맑은 고딕", 14, "bold"), foreground=NAVY, spacing3=self.px(8))
+        self.summary.tag_configure("summary_heading", font=("맑은 고딕", 10, "bold"), foreground=BLUE, spacing1=self.px(7))
+        self.summary.tag_configure("summary_bullet", lmargin1=self.px(4), lmargin2=self.px(16), spacing3=self.px(2))
         self.summary.configure(state="disabled")
 
     def start_analysis(self) -> None:
@@ -811,20 +931,9 @@ class DartQoeApp:
     def _finish_success(self, data: dict, output: Path) -> None:
         self._set_idle(keep_progress=True)
         self.last_output = output
-        metadata = data.get("metadata", {})
-        years = data.get("years", [])
-        candidates = data.get("candidates", [])
-        errors = data.get("errors", [])
         self.status_var.set("완료 · 엑셀 검토 파일이 생성되었습니다 · 100%")
         self.status_label.configure(fg=GREEN)
-        self._set_summary(
-            f"회사\n{metadata.get('company_name', '-')}\n\n"
-            f"분석기간\n{', '.join(map(str, years)) or '-'}\n\n"
-            f"재무제표 기준\n{metadata.get('basis', '-')}\n\n"
-            f"정상화 조정 검토 후보\n{len(candidates)}건\n\n"
-            f"추출 오류 또는 제한사항\n{len(errors)}건\n\n"
-            f"저장 위치\n{output}"
-        )
+        self._set_summary(build_result_summary(data))
         self.open_button.configure(state="normal", cursor="hand2")
 
     def _finish_error(self, message: str) -> None:
