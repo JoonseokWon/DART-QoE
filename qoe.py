@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import date
 from html import unescape
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from xml.etree import ElementTree as ET
 
 
@@ -307,13 +307,31 @@ def demo_analysis() -> dict[str, Any]:
     return data
 
 
-def analyze_dart(api_key: str, company_query: str, begin_year: int, end_year: int, include_lease: bool = True, fetch_notes: bool = True) -> dict[str, Any]:
+def analyze_dart(
+    api_key: str,
+    company_query: str,
+    begin_year: int,
+    end_year: int,
+    include_lease: bool = True,
+    fetch_notes: bool = True,
+    progress_callback: Callable[[int, str], None] | None = None,
+) -> dict[str, Any]:
+    def report(percent: int, message: str) -> None:
+        if progress_callback is not None:
+            progress_callback(percent, message)
+
     if end_year - begin_year > 4 or begin_year > end_year:
         raise ValueError("분석기간은 순서대로 최대 5개년까지 입력하세요.")
+    report(4, "회사 정보를 확인하고 있습니다")
     client = DartClient(api_key.strip())
     company = client.resolve_company(company_query)
+    report(10, f"회사 확인 완료 · {company['corp_name']}")
     rows_by_year, basis_by_year, filings, note_texts, errors = {}, {}, [], {}, []
-    for year in range(begin_year, end_year + 1):
+    years = list(range(begin_year, end_year + 1))
+    year_span = 72 / len(years)
+    for index, year in enumerate(years):
+        year_start = 10 + year_span * index
+        report(round(year_start + year_span * 0.10), f"{year}년 재무제표를 조회하고 있습니다")
         try:
             rows, basis = client.annual_accounts(company["corp_code"], year)
             if rows:
@@ -321,8 +339,11 @@ def analyze_dart(api_key: str, company_query: str, begin_year: int, end_year: in
                 basis_by_year[year] = basis
         except Exception as exc:
             errors.append({"year": year, "stage": "재무제표", "message": str(exc)})
+            report(round(year_start + year_span), f"{year}년 재무제표 조회를 마쳤습니다")
             continue
+        report(round(year_start + year_span * 0.45), f"{year}년 재무제표 확인 완료")
         try:
+            report(round(year_start + year_span * 0.55), f"{year}년 사업보고서와 주석을 조회하고 있습니다")
             filing = client.annual_filing(company["corp_code"], year)
             if filing:
                 filing = {**filing, "year": year, "url": DART_VIEWER + filing["rcept_no"]}
@@ -331,11 +352,14 @@ def analyze_dart(api_key: str, company_query: str, begin_year: int, end_year: in
                     note_texts[year] = client.filing_text(filing["rcept_no"])
         except Exception as exc:
             errors.append({"year": year, "stage": "공시 원문", "message": str(exc)})
+        report(round(year_start + year_span), f"{year}년 공시 자료 확인 완료")
     if not rows_by_year:
         detail = " / ".join(f"{item['year']}년: {item['message']}" for item in errors if item["stage"] == "재무제표")
         raise DartError(f"분석 가능한 연결·별도 재무제표를 찾지 못했습니다. {detail}".strip())
+    report(86, "재무지표와 검토 후보를 계산하고 있습니다")
     result = build_analysis(company, rows_by_year, filings, note_texts, include_lease, basis_by_year)
     result["errors"] = errors
+    report(91, "분석 계산을 완료했습니다")
     return result
 
 

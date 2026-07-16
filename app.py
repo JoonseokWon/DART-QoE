@@ -255,12 +255,17 @@ class NativeWindowsEntry:
             ctypes.windll.gdi32.DeleteObject(self.font_handle)
 
 
-def export_excel(data: dict, stem: str) -> Path:
+def export_excel(data: dict, stem: str, progress_callback=None) -> Path:
+    def report(percent: int, message: str) -> None:
+        if progress_callback is not None:
+            progress_callback(percent, message)
+
     OUTPUTS.mkdir(exist_ok=True)
     safe = "".join(ch for ch in stem if ch.isalnum() or ch in "-_가-힣") or "qoe"
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     json_path = OUTPUTS / f".{safe}_{stamp}.json"
     out = OUTPUTS / f"DART-QoE_{safe}_{stamp}.xlsx"
+    report(93, "엑셀 원천 자료를 준비하고 있습니다")
     save_json(data, json_path)
     bundled_node = BUNDLE_ROOT / "node" / "node.exe"
     node = Path(os.environ.get("DART_QOE_NODE", bundled_node if FROZEN else NODE_DEFAULT))
@@ -272,6 +277,7 @@ def export_excel(data: dict, stem: str) -> Path:
     )
     env.setdefault("NODE_PATH", str(default_node_path))
     try:
+        report(96, "엑셀 시트와 차트를 생성하고 있습니다")
         completed = subprocess.run(
             [str(node), str(BUNDLE_ROOT / "export_workbook.mjs"), str(json_path), str(out)],
             cwd=BUNDLE_ROOT,
@@ -286,6 +292,7 @@ def export_excel(data: dict, stem: str) -> Path:
             raise RuntimeError(completed.stderr[-2000:] or completed.stdout[-2000:])
     finally:
         json_path.unlink(missing_ok=True)
+    report(99, "엑셀 파일 저장을 마무리하고 있습니다")
     return out
 
 
@@ -536,7 +543,7 @@ class DartQoeApp:
         )
         self.status_label.configure(anchor="w", justify="left", wraplength=self.px(650))
         self.status_label.grid(row=1, column=0, sticky="ew", pady=(self.px(5), self.px(11)))
-        self.progress = ttk.Progressbar(result, mode="indeterminate")
+        self.progress = ttk.Progressbar(result, mode="determinate", maximum=100, value=0)
         self.progress.grid(row=2, column=0, sticky="ew", pady=(0, self.px(17)))
         self.progress.grid_remove()
 
@@ -644,23 +651,36 @@ class DartQoeApp:
         self.run_button.configure(state="disabled")
         self.demo_button.configure(state="disabled")
         self.open_button.configure(state="disabled")
-        self.status_var.set("분석 중 · 실제 공시 원문 수집은 수 분 걸릴 수 있습니다")
+        self.status_var.set("분석을 준비하고 있습니다 · 2%")
         self.status_label.configure(fg=BLUE)
         self._set_summary("DART 공시와 원문 주석을 수집하고 계산 근거를 구성하고 있습니다.\n창을 닫지 말고 잠시 기다려 주세요.")
+        self.progress.configure(value=2)
         self.progress.grid()
-        self.progress.start(10)
         threading.Thread(target=self._worker, args=(demo, request), daemon=True).start()
+
+    def _queue_progress(self, percent: int, message: str) -> None:
+        self.root.after(0, self._apply_progress, percent, message)
+
+    def _apply_progress(self, percent: int, message: str) -> None:
+        if not self.busy:
+            return
+        current = int(float(self.progress.cget("value")))
+        value = max(current, min(100, int(percent)))
+        self.progress.configure(value=value)
+        self.status_var.set(f"{message} · {value}%")
 
     def _worker(self, demo: bool, request: tuple | None) -> None:
         try:
             if demo:
+                self._queue_progress(20, "데모 자료를 준비하고 있습니다")
                 data = demo_analysis()
                 stem = "demo"
+                self._queue_progress(91, "데모 분석 계산을 완료했습니다")
             else:
                 assert request is not None
-                data = analyze_dart(*request)
+                data = analyze_dart(*request, progress_callback=self._queue_progress)
                 stem = data["metadata"]["company_name"]
-            output = export_excel(data, stem)
+            output = export_excel(data, stem, progress_callback=self._queue_progress)
             self.root.after(0, self._finish_success, data, output)
         except Exception as exc:
             details = traceback.format_exc()
@@ -671,13 +691,13 @@ class DartQoeApp:
             self.root.after(0, self._finish_error, str(exc))
 
     def _finish_success(self, data: dict, output: Path) -> None:
-        self._set_idle()
+        self._set_idle(keep_progress=True)
         self.last_output = output
         metadata = data.get("metadata", {})
         years = data.get("years", [])
         candidates = data.get("candidates", [])
         errors = data.get("errors", [])
-        self.status_var.set("완료 · 엑셀 검토 파일이 생성되었습니다")
+        self.status_var.set("완료 · 엑셀 검토 파일이 생성되었습니다 · 100%")
         self.status_label.configure(fg=GREEN)
         self._set_summary(
             f"회사\n{metadata.get('company_name', '-')}\n\n"
@@ -696,11 +716,14 @@ class DartQoeApp:
         self._set_summary(f"분석을 완료하지 못했습니다.\n\n{message}\n\n상세 내용은 DART-QoE-error.log에 기록됩니다.")
         messagebox.showerror("DART-QoE 오류", message, parent=self.root)
 
-    def _set_idle(self) -> None:
+    def _set_idle(self, keep_progress: bool = False) -> None:
         self.busy = False
-        self.progress.stop()
-        self.progress.configure(value=0)
-        self.progress.grid_remove()
+        if keep_progress:
+            self.progress.configure(value=100)
+            self.progress.grid()
+        else:
+            self.progress.configure(value=0)
+            self.progress.grid_remove()
         self.run_button.configure(state="normal")
         self.demo_button.configure(state="normal")
 
