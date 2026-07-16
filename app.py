@@ -455,7 +455,6 @@ class DartQoeApp:
         self.progress.grid()
         self.progress.start(12)
         self.run_button.configure(state="disabled")
-        self.demo_button.configure(state="disabled")
         self.root.update_idletasks()
 
     def _restart_development_app(self) -> None:
@@ -642,7 +641,7 @@ class DartQoeApp:
         self.run_button = tk.Button(
             form,
             text="분석 및 엑셀 생성",
-            command=lambda: self.start_analysis(False),
+            command=self.start_analysis,
             bg=BLUE,
             fg=WHITE,
             activebackground=NAVY,
@@ -652,28 +651,12 @@ class DartQoeApp:
             font=("맑은 고딕", 11, "bold"),
             pady=self.px(11),
         )
-        self.run_button.pack(fill="x", pady=(self.px(21), self.px(8)))
-        self.demo_button = tk.Button(
-            form,
-            text="인증키 없이 데모 생성",
-            command=lambda: self.start_analysis(True),
-            bg=PALE,
-            fg=NAVY,
-            activebackground="#DDE8F3",
-            relief="flat",
-            cursor="hand2",
-            font=("맑은 고딕", 10, "bold"),
-            pady=self.px(9),
-        )
-        self.demo_button.pack(fill="x")
+        self.run_button.pack(fill="x", pady=(self.px(21), 0))
 
         notice = tk.Frame(form, bg=AMBER, padx=self.px(12), pady=self.px(10))
         notice.pack(fill="x", side="bottom")
         notice.grid_columnconfigure(1, weight=1)
-        for row, (label, value) in enumerate((
-            ("인증키", "윈도우 계정으로 암호화 저장"),
-            ("데모 데이터", "기능 설명용 샘플"),
-        )):
+        for row, (label, value) in enumerate((("인증키", "윈도우 계정으로 암호화 저장"),)):
             tk.Label(notice, text=label, bg=AMBER, fg="#695A20", font=("맑은 고딕", 9, "bold")).grid(
                 row=row, column=0, sticky="nw", padx=(0, self.px(12)), pady=self.px(2))
             tk.Label(notice, text=value, bg=AMBER, fg="#695A20", font=("맑은 고딕", 9)).grid(
@@ -758,7 +741,7 @@ class DartQoeApp:
         self.summary.tag_configure("body", spacing1=self.px(2), spacing3=self.px(5))
         self.summary.configure(state="disabled")
 
-    def start_analysis(self, demo: bool) -> None:
+    def start_analysis(self) -> None:
         if self.busy:
             return
         for entry in self.native_entries:
@@ -766,20 +749,17 @@ class DartQoeApp:
         self.pending_api_key = ""
         self.pending_save_key = False
         try:
-            if demo:
-                request = None
-            else:
-                api_key = self.api_var.get().strip()
-                company = self.company_var.get().strip()
-                begin_year = int(self.begin_var.get())
-                end_year = int(self.end_var.get())
-                if not api_key or not company:
-                    raise ValueError("전자공시 인증키와 회사명을 입력하세요.")
-                if begin_year > end_year or end_year - begin_year > 4:
-                    raise ValueError("분석기간은 순서대로 최대 5개년까지 입력하세요.")
-                request = (api_key, company, begin_year, end_year, self.lease_var.get(), self.notes_var.get())
-                self.pending_api_key = api_key
-                self.pending_save_key = self.save_key_var.get()
+            api_key = self.api_var.get().strip()
+            company = self.company_var.get().strip()
+            begin_year = int(self.begin_var.get())
+            end_year = int(self.end_var.get())
+            if not api_key or not company:
+                raise ValueError("전자공시 인증키와 회사명을 입력하세요.")
+            if begin_year > end_year or end_year - begin_year > 4:
+                raise ValueError("분석기간은 순서대로 최대 5개년까지 입력하세요.")
+            request = (api_key, company, begin_year, end_year, self.lease_var.get(), self.notes_var.get())
+            self.pending_api_key = api_key
+            self.pending_save_key = self.save_key_var.get()
         except ValueError as exc:
             messagebox.showwarning("입력 확인", str(exc), parent=self.root)
             return
@@ -795,14 +775,13 @@ class DartQoeApp:
 
         self.busy = True
         self.run_button.configure(state="disabled")
-        self.demo_button.configure(state="disabled")
         self.open_button.configure(state="disabled")
         self.status_var.set("분석을 준비하고 있습니다 · 2%")
         self.status_label.configure(fg=BLUE)
         self._set_summary("DART 공시와 원문 주석을 수집하고 계산 근거를 구성하고 있습니다.\n창을 닫지 말고 잠시 기다려 주세요.")
         self.progress.configure(value=2)
         self.progress.grid()
-        threading.Thread(target=self._worker, args=(demo, request), daemon=True).start()
+        threading.Thread(target=self._worker, args=(request,), daemon=True).start()
 
     def _queue_progress(self, percent: int, message: str) -> None:
         self.root.after(0, self._apply_progress, percent, message)
@@ -815,17 +794,10 @@ class DartQoeApp:
         self.progress.configure(value=value)
         self.status_var.set(f"{message} · {value}%")
 
-    def _worker(self, demo: bool, request: tuple | None) -> None:
+    def _worker(self, request: tuple) -> None:
         try:
-            if demo:
-                self._queue_progress(20, "데모 자료를 준비하고 있습니다")
-                data = demo_analysis()
-                stem = "demo"
-                self._queue_progress(91, "데모 분석 계산을 완료했습니다")
-            else:
-                assert request is not None
-                data = analyze_dart(*request, progress_callback=self._queue_progress)
-                stem = data["metadata"]["company_name"]
+            data = analyze_dart(*request, progress_callback=self._queue_progress)
+            stem = data["metadata"]["company_name"]
             output = export_excel(data, stem, progress_callback=self._queue_progress)
             self.root.after(0, self._finish_success, data, output)
         except Exception as exc:
@@ -871,7 +843,6 @@ class DartQoeApp:
             self.progress.configure(value=0)
             self.progress.grid_remove()
         self.run_button.configure(state="normal")
-        self.demo_button.configure(state="normal")
 
     def open_excel(self) -> None:
         if self.last_output and self.last_output.exists():
