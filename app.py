@@ -36,12 +36,15 @@ BG = "#F4F7FA"
 
 
 def enable_dpi_awareness() -> None:
-    """Ask Windows for native-resolution drawing before Tk creates a window."""
+    """Use Tk-compatible native-resolution drawing before creating a window."""
     try:
-        ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))
+        # Tk 8.6 can misplace Korean IME composition text with Per-Monitor V2.
+        # System DPI awareness keeps the primary-monitor rendering sharp while
+        # preserving the input method's text baseline and composition position.
+        ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-2))
     except Exception:
         try:
-            ctypes.windll.shcore.SetProcessDpiAwareness(2)
+            ctypes.windll.shcore.SetProcessDpiAwareness(1)
         except Exception:
             try:
                 ctypes.windll.user32.SetProcessDPIAware()
@@ -245,6 +248,28 @@ class DartQoeApp:
             anchor="w", pady=(self.px(12), self.px(5))
         )
 
+    def _text_entry(self, parent: tk.Widget, variable: tk.StringVar, *, show: str | None = None) -> tk.Entry:
+        """Create a Windows IME-friendly entry with a stable Korean baseline."""
+        options: dict[str, object] = {
+            "textvariable": variable,
+            "font": ("맑은 고딕", 10),
+            "bg": WHITE,
+            "fg": INK,
+            "insertbackground": INK,
+            "selectbackground": BLUE,
+            "selectforeground": WHITE,
+            "relief": "flat",
+            "borderwidth": 0,
+            "highlightthickness": 1,
+            "highlightbackground": LINE,
+            "highlightcolor": BLUE,
+        }
+        if show is not None:
+            options["show"] = show
+        entry = tk.Entry(parent, **options)
+        entry.pack(fill="x", ipady=self.px(8))
+        return entry
+
     def _build_form(self, form: tk.Frame) -> None:
         tk.Label(form, text="분석 조건", bg=WHITE, fg=NAVY, font=("맑은 고딕", 18, "bold")).pack(anchor="w")
         tk.Label(
@@ -267,7 +292,7 @@ class DartQoeApp:
         self.notes_var = tk.BooleanVar(value=True)
 
         self._field_label(form, "전자공시 인증키")
-        ttk.Entry(form, textvariable=self.api_var, show="●").pack(fill="x")
+        self._text_entry(form, self.api_var, show="●")
         ttk.Checkbutton(
             form,
             text="이 PC에 암호화하여 저장",
@@ -275,7 +300,7 @@ class DartQoeApp:
             command=self._storage_preference_changed,
         ).pack(anchor="w", pady=(self.px(7), 0))
         self._field_label(form, "회사명 또는 종목코드")
-        ttk.Entry(form, textvariable=self.company_var).pack(fill="x")
+        self._text_entry(form, self.company_var)
         self._field_label(form, "분석기간")
         years = tk.Frame(form, bg=WHITE)
         years.pack(fill="x")
