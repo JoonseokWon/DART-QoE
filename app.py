@@ -83,10 +83,21 @@ Wait-Process -Id {process_id} -ErrorAction SilentlyContinue
 # the Python child process above. Wait for that parent to finish deleting its
 # temporary _MEI directory before replacing and relaunching the executable.
 $processName = [System.IO.Path]::GetFileNameWithoutExtension($current)
-for ($attempt = 0; $attempt -lt 80; $attempt++) {{
-    $remaining = @(Get-Process -Name $processName -ErrorAction SilentlyContinue)
+for ($attempt = 0; $attempt -lt 40; $attempt++) {{
+    $remaining = @(
+        Get-Process -Name $processName -ErrorAction SilentlyContinue |
+        Where-Object {{ $_.Path -eq $current }}
+    )
     if ($remaining.Count -eq 0) {{ break }}
     Start-Sleep -Milliseconds 250
+}}
+$remaining = @(
+    Get-Process -Name $processName -ErrorAction SilentlyContinue |
+    Where-Object {{ $_.Path -eq $current }}
+)
+if ($remaining.Count -gt 0) {{
+    $remaining | Stop-Process -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Milliseconds 1000
 }}
 $installed = $false
 for ($attempt = 0; $attempt -lt 40; $attempt++) {{
@@ -100,7 +111,7 @@ for ($attempt = 0; $attempt -lt 40; $attempt++) {{
     }}
 }}
 if (Test-Path -LiteralPath $current) {{
-    Start-Sleep -Milliseconds 500
+    Start-Sleep -Milliseconds 2000
     Start-Process -FilePath $current -WorkingDirectory $working
 }}
 """.strip()
