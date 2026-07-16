@@ -31,6 +31,11 @@ class AutomaticRestartTests(unittest.TestCase):
         self.assertIn("$shell.ShellExecute($current, '', $working, 'open', 1)", script)
         self.assertIn(str(update), script)
 
+    def test_packaged_app_does_not_start_self_update_watcher(self):
+        source = Path("app.py").read_text(encoding="utf-8")
+        self.assertIn("if not FROZEN:", source)
+        self.assertNotIn("if FROZEN:\n            self._watch_for_packaged_update()", source)
+
 
 class ResultSummaryTests(unittest.TestCase):
     def test_summary_prioritizes_key_metrics_and_review_points(self):

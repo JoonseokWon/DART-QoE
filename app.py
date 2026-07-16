@@ -565,7 +565,11 @@ class DartQoeApp:
         self._set_icon()
         self._configure_styles()
         self._build_ui()
-        self.root.after(1000, self._watch_for_changes)
+        # Development source files can still hot-reload. Packaged one-file
+        # executables are replaced and relaunched externally to avoid
+        # PyInstaller _MEI extraction races during self-update.
+        if not FROZEN:
+            self.root.after(1000, self._watch_for_changes)
 
     def px(self, value: int) -> int:
         return max(1, round(value * self.scale))
@@ -592,14 +596,11 @@ class DartQoeApp:
     def _watch_for_changes(self) -> None:
         if self.restarting:
             return
-        if FROZEN:
-            self._watch_for_packaged_update()
-        else:
-            current = source_snapshot()
-            if current != self._source_snapshot:
-                self._source_snapshot = current
-                self._restart_development_app()
-                return
+        current = source_snapshot()
+        if current != self._source_snapshot:
+            self._source_snapshot = current
+            self._restart_development_app()
+            return
         self.root.after(1000, self._watch_for_changes)
 
     def _watch_for_packaged_update(self) -> None:
