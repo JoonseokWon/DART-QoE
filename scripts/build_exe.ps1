@@ -6,10 +6,11 @@ param(
 $ErrorActionPreference = "Stop"
 $Root = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
 $Runtime = "C:\Users\user\.cache\codex-runtimes\codex-primary-runtime\dependencies"
+$PythonRoot = Split-Path -Parent $Python
 $Node = Join-Path $Runtime "node\bin\node.exe"
 $ArtifactTool = Join-Path $Runtime "node\node_modules\@oai\artifact-tool"
-$env:TCL_LIBRARY = Join-Path $Runtime "python\tcl\tcl8.6"
-$env:TK_LIBRARY = Join-Path $Runtime "python\tcl\tk8.6"
+$env:TCL_LIBRARY = Join-Path $PythonRoot "tcl\tcl8.6"
+$env:TK_LIBRARY = Join-Path $PythonRoot "tcl\tk8.6"
 $IconPng = Join-Path $Root "assets\DART-QoE.png"
 $IconIco = Join-Path $Root "assets\DART-QoE.ico"
 $VersionFile = Join-Path $Root "assets\DART-QoE.version.txt"
@@ -19,7 +20,18 @@ $TargetName = "DART-QoE"
 $WindowMode = if ($Console) { "--console" } else { "--windowed" }
 $Output = Join-Path $Root "$TargetName.exe"
 
-foreach ($Path in @($Python, $Node, $ArtifactTool, $VersionFile, (Join-Path $Root "export_workbook.mjs"))) {
+$TkinterPackage = Join-Path $PythonRoot "Lib\tkinter"
+$TkinterBinary = Join-Path $PythonRoot "DLLs\_tkinter.pyd"
+$TclBinary = Join-Path $PythonRoot "DLLs\tcl86t.dll"
+$TkBinary = Join-Path $PythonRoot "DLLs\tk86t.dll"
+$TclData = Join-Path $PythonRoot "tcl\tcl8.6"
+$TkData = Join-Path $PythonRoot "tcl\tk8.6"
+
+foreach ($Path in @(
+    $Python, $Node, $ArtifactTool, $VersionFile,
+    (Join-Path $Root "export_workbook.mjs"),
+    $TkinterPackage, $TkinterBinary, $TclBinary, $TkBinary, $TclData, $TkData
+)) {
     if (-not (Test-Path -LiteralPath $Path)) {
         throw "Required build dependency not found: $Path"
     }
@@ -47,6 +59,12 @@ New-Item -ItemType Directory -Force -Path $Build, $Dist | Out-Null
     --add-data "$IconPng;assets" `
     --add-binary "$Node;node" `
     --add-data "$ArtifactTool;node_modules\@oai\artifact-tool" `
+    --add-data "$TkinterPackage;tkinter" `
+    --add-binary "$TkinterBinary;." `
+    --add-binary "$TclBinary;." `
+    --add-binary "$TkBinary;." `
+    --add-data "$TclData;_tcl_data" `
+    --add-data "$TkData;_tk_data" `
     (Join-Path $Root "app.py")
 
 if ($LASTEXITCODE -ne 0) {

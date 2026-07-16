@@ -12,6 +12,15 @@ from ctypes import wintypes
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
+
+# The bundled workspace Python can run Tkinter even when PyInstaller cannot
+# discover its Tcl/Tk data directories automatically. The executable build
+# includes those directories explicitly, so point Tk at them before import.
+if getattr(sys, "frozen", False):
+    bundle_root = getattr(sys, "_MEIPASS", os.path.dirname(sys.executable))
+    os.environ.setdefault("TCL_LIBRARY", os.path.join(bundle_root, "_tcl_data"))
+    os.environ.setdefault("TK_LIBRARY", os.path.join(bundle_root, "_tk_data"))
+
 import tkinter as tk
 from tkinter import font as tkfont
 from tkinter import messagebox, ttk
