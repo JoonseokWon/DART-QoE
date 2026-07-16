@@ -49,6 +49,9 @@ GREEN = "#2E7D5B"
 AMBER = "#FFF2CC"
 WHITE = "#FFFFFF"
 BG = "#F4F7FA"
+SINGLE_INSTANCE_MUTEX = r"Local\DART-QoE-JoonseokWon"
+ERROR_ALREADY_EXISTS = 183
+_single_instance_handle: int | None = None
 
 
 def source_snapshot(paths: tuple[Path, ...] = WATCHED_SOURCE_FILES) -> tuple[tuple[str, int, int], ...]:
@@ -124,7 +127,11 @@ if (Test-Path -LiteralPath $current) {{
         Remove-Item ("Env:" + $_.Name) -ErrorAction SilentlyContinue
     }}
     $env:PYINSTALLER_RESET_ENVIRONMENT = '1'
-    Start-Process -FilePath $current -WorkingDirectory $working -UseNewEnvironment
+    # Delegate the launch to the Windows shell process. Explorer is already
+    # running outside PyInstaller, so the replacement app cannot inherit the
+    # previous one-file bootloader's private _PYI/_MEI environment.
+    $shell = New-Object -ComObject Shell.Application
+    $shell.ShellExecute($current, '', $working, 'open', 1)
 }}
 """.strip()
     encoded = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
@@ -673,6 +680,8 @@ class DartQoeApp:
             style.theme_use("clam")
         except tk.TclError:
             pass
+
+
         for name in ("TkDefaultFont", "TkTextFont", "TkMenuFont", "TkCaptionFont"):
             try:
                 tkfont.nametofont(name).configure(family="맑은 고딕", size=10)
@@ -1049,6 +1058,24 @@ class DartQoeApp:
             delete_saved_api_key()
 
 
+def acquire_single_instance() -> bool:
+    """Allow only one interactive DART-QoE instance per Windows session."""
+    global _single_instance_handle
+    if sys.platform != "win32":
+        return True
+    kernel32 = ctypes.windll.kernel32
+    kernel32.CreateMutexW.argtypes = (wintypes.LPVOID, wintypes.BOOL, wintypes.LPCWSTR)
+    kernel32.CreateMutexW.restype = wintypes.HANDLE
+    handle = kernel32.CreateMutexW(None, False, SINGLE_INSTANCE_MUTEX)
+    if not handle:
+        return True
+    if kernel32.GetLastError() == ERROR_ALREADY_EXISTS:
+        kernel32.CloseHandle(handle)
+        return False
+    _single_instance_handle = int(handle)
+    return True
+
+
 def smoke_test() -> int:
     output = export_excel(demo_analysis(), "desktop_smoke")
     (ROOT / "DART-QoE-smoke.txt").write_text(str(output), encoding="utf-8")
@@ -1058,6 +1085,8 @@ def smoke_test() -> int:
 def main() -> int:
     if "--smoke-test" in sys.argv:
         return smoke_test()
+    if not acquire_single_instance():
+        return 0
     enable_dpi_awareness()
     root = tk.Tk()
     DartQoeApp(root)
