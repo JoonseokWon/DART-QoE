@@ -12,13 +12,14 @@ $env:TCL_LIBRARY = Join-Path $Runtime "python\tcl\tcl8.6"
 $env:TK_LIBRARY = Join-Path $Runtime "python\tcl\tk8.6"
 $IconPng = Join-Path $Root "assets\DART-QoE.png"
 $IconIco = Join-Path $Root "assets\DART-QoE.ico"
+$VersionFile = Join-Path $Root "assets\DART-QoE.version.txt"
 $Build = Join-Path $Root "build\pyinstaller"
 $Dist = Join-Path $Root "dist"
 $TargetName = "DART-QoE"
 $WindowMode = if ($Console) { "--console" } else { "--windowed" }
 $Output = Join-Path $Root "$TargetName.exe"
 
-foreach ($Path in @($Python, $Node, $ArtifactTool, (Join-Path $Root "export_workbook.mjs"))) {
+foreach ($Path in @($Python, $Node, $ArtifactTool, $VersionFile, (Join-Path $Root "export_workbook.mjs"))) {
     if (-not (Test-Path -LiteralPath $Path)) {
         throw "Required build dependency not found: $Path"
     }
@@ -38,6 +39,7 @@ New-Item -ItemType Directory -Force -Path $Build, $Dist | Out-Null
     $WindowMode `
     --name $TargetName `
     --icon $IconIco `
+    --version-file $VersionFile `
     --distpath $Dist `
     --workpath $Build `
     --specpath $Build `
