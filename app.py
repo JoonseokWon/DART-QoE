@@ -159,6 +159,15 @@ class DartQoeApp:
         return max(1, round(value * self.scale))
 
     def _set_icon(self) -> None:
+        branded_icon = BUNDLE_ROOT / "assets" / "DART-QoE.png"
+        if branded_icon.exists():
+            try:
+                icon = tk.PhotoImage(file=branded_icon)
+                self._icon = icon
+                self.root.iconphoto(True, icon)
+                return
+            except tk.TclError:
+                pass
         icon = tk.PhotoImage(width=32, height=32)
         icon.put(NAVY, to=(0, 0, 32, 32))
         icon.put(BLUE, to=(5, 5, 27, 27))

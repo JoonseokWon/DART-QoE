@@ -10,6 +10,8 @@ $Node = Join-Path $Runtime "node\bin\node.exe"
 $ArtifactTool = Join-Path $Runtime "node\node_modules\@oai\artifact-tool"
 $env:TCL_LIBRARY = Join-Path $Runtime "python\tcl\tcl8.6"
 $env:TK_LIBRARY = Join-Path $Runtime "python\tcl\tk8.6"
+$IconPng = Join-Path $Root "assets\DART-QoE.png"
+$IconIco = Join-Path $Root "assets\DART-QoE.ico"
 $Build = Join-Path $Root "build\pyinstaller"
 $Dist = Join-Path $Root "dist"
 $TargetName = "DART-QoE"
@@ -22,6 +24,11 @@ foreach ($Path in @($Python, $Node, $ArtifactTool, (Join-Path $Root "export_work
     }
 }
 
+& $Python (Join-Path $Root "scripts\build_icon.py")
+if ($LASTEXITCODE -ne 0) {
+    throw "Icon build failed with exit code $LASTEXITCODE"
+}
+
 New-Item -ItemType Directory -Force -Path $Build, $Dist | Out-Null
 
 & $Python -m PyInstaller `
@@ -30,10 +37,12 @@ New-Item -ItemType Directory -Force -Path $Build, $Dist | Out-Null
     --onefile `
     $WindowMode `
     --name $TargetName `
+    --icon $IconIco `
     --distpath $Dist `
     --workpath $Build `
     --specpath $Build `
     --add-data "$(Join-Path $Root 'export_workbook.mjs');." `
+    --add-data "$IconPng;assets" `
     --add-binary "$Node;node" `
     --add-data "$ArtifactTool;node_modules\@oai\artifact-tool" `
     (Join-Path $Root "app.py")
