@@ -148,7 +148,9 @@ def build_result_summary(data: dict) -> str:
     margin_change = latest_margin - first_margin if latest_margin is not None and first_margin is not None else None
     cash_conversion = _metric_value(latest, "cfo_to_operating_profit")
     latest_nwc_ratio = _metric_value(latest, "nwc_to_revenue")
-    previous_nwc_ratio = _metric_value(metrics[-2], "nwc_to_revenue") if len(metrics) > 1 else None
+    previous = metrics[-2] if len(metrics) > 1 else None
+    previous_year = previous.get("year", "-") if previous else "-"
+    previous_nwc_ratio = _metric_value(previous, "nwc_to_revenue") if previous else None
     nwc_change = latest_nwc_ratio - previous_nwc_ratio if latest_nwc_ratio is not None and previous_nwc_ratio is not None else None
     latest_net_debt = _metric_value(latest, "net_debt")
     first_net_debt = _metric_value(first, "net_debt")
@@ -166,11 +168,17 @@ def build_result_summary(data: dict) -> str:
 
     review_points = []
     if cash_conversion is not None and cash_conversion < 0.8:
-        review_points.append(f"최근 영업현금 전환율이 {_format_percent(cash_conversion)}로 낮아 현금화 원인을 확인하세요.")
+        review_points.append(f"{latest_year}년 영업현금 전환율이 {_format_percent(cash_conversion)}로 낮아 현금화 원인을 확인하세요.")
     if nwc_change is not None and nwc_change > 0.02:
-        review_points.append(f"매출 대비 순운전자본이 전년보다 {nwc_change * 100:.1f}%p 상승했습니다.")
+        review_points.append(
+            f"매출 대비 순운전자본이 {previous_year}년에서 {latest_year}년으로 "
+            f"{nwc_change * 100:.1f}%p 상승했습니다."
+        )
     if latest_net_debt is not None and first_net_debt is not None and latest_net_debt > first_net_debt:
-        review_points.append(f"순차입금이 분석 첫해보다 {_format_amount(latest_net_debt - first_net_debt)} 증가했습니다.")
+        review_points.append(
+            f"순차입금이 {first_year}년에서 {latest_year}년으로 "
+            f"{_format_amount(latest_net_debt - first_net_debt)} 증가했습니다."
+        )
     if candidates:
         review_points.append("조정 후보는 확정 조정이 아니므로 금액·반복 여부·원문 맥락을 확인하세요.")
     if not review_points:
@@ -185,13 +193,19 @@ def build_result_summary(data: dict) -> str:
         f"• 추출 오류 또는 제한사항: {error_text}",
         "",
         "[핵심 지표]",
-        f"• 매출: {_format_amount(first_revenue)} → {_format_amount(latest_revenue)} · 연평균 성장률 {_format_percent(cagr)}",
-        f"• 영업이익률: {_format_percent(first_margin)} → {_format_percent(latest_margin)}"
+        f"• 매출: {first_year}년 {_format_amount(first_revenue)} → "
+        f"{latest_year}년 {_format_amount(latest_revenue)} · 연평균 성장률 {_format_percent(cagr)}",
+        f"• 영업이익률: {first_year}년 {_format_percent(first_margin)} → "
+        f"{latest_year}년 {_format_percent(latest_margin)}"
         + (f" · {margin_change * 100:+.1f}%p" if margin_change is not None else ""),
-        f"• 최근 영업현금 전환율: {_format_percent(cash_conversion)}",
-        f"• 매출 대비 순운전자본: {_format_percent(latest_nwc_ratio)}"
-        + (f" · 전년 대비 {nwc_change * 100:+.1f}%p" if nwc_change is not None else ""),
-        f"• 자금 상태: {debt_text}",
+        f"• 영업현금 전환율: {latest_year}년 {_format_percent(cash_conversion)}",
+        f"• 매출 대비 순운전자본: {latest_year}년 {_format_percent(latest_nwc_ratio)}"
+        + (
+            f" · {previous_year}년 → {latest_year}년 {nwc_change * 100:+.1f}%p"
+            if nwc_change is not None
+            else ""
+        ),
+        f"• 자금 상태: {latest_year}년 {debt_text}",
         f"• 정상화 조정 검토 후보: {candidate_text}",
         "",
         "[추가 확인 포인트]",
