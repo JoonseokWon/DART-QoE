@@ -366,6 +366,7 @@ class NativeWindowsEntry:
         self.variable = variable
         self.scale = scale
         self._destroyed = False
+        self.vertical_offset = max(1, round(2 * scale))
         self.container = tk.Frame(parent, bg=WHITE, height=max(34, round(36 * scale)))
         self.container.pack(fill="x")
         self.container.pack_propagate(False)
@@ -434,9 +435,9 @@ class NativeWindowsEntry:
             variable.get(),
             styles,
             0,
-            0,
+            self.vertical_offset,
             max(1, self.container.winfo_width()),
-            max(1, self.container.winfo_height()),
+            max(1, self.container.winfo_height() - self.vertical_offset),
             self.container.winfo_id(),
             None,
             kernel32.GetModuleHandleW(None),
@@ -479,9 +480,9 @@ class NativeWindowsEntry:
         ctypes.windll.user32.MoveWindow(
             self.hwnd,
             0,
-            0,
+            self.vertical_offset,
             max(1, self.container.winfo_width()),
-            max(1, self.container.winfo_height()),
+            max(1, self.container.winfo_height() - self.vertical_offset),
             True,
         )
 
