@@ -64,7 +64,7 @@ widths(cover, {A:20,B:22,C:3,D:17,E:17,F:17,G:17,H:17,I:17,J:17});
 title(inputs, "원천 자료 | 공시 추출값", "O");
 const sourceHeaders = ["연도","매출액","영업이익","순이익","영업현금흐름","매출채권","재고자산","매입채무","현금및현금성자산","매출원가","차입금·사채","리스부채","추출 기준","자동 추출","사용자 메모"];
 inputs.getRange("A4:O4").values = [sourceHeaders]; header(inputs.getRange("A4:O4"));
-inputs.getRange(`A5:O${4+data.metrics.length}`).values = data.metrics.map(m => [m.year,m.revenue,m.operating_profit,m.net_income,m.cfo,m.ar,m.inventory,m.ap,m.cash,m.cogs,m.debt,m.lease,"전자공시 재무제표 조회","예",""]);
+inputs.getRange(`A5:O${4+data.metrics.length}`).values = data.metrics.map(m => [m.year,m.revenue,m.operating_profit,m.net_income,m.cfo,m.ar,m.inventory,m.ap,m.cash ?? 0,m.cogs,m.debt ?? 0,m.lease ?? 0,"전자공시 재무제표 조회","예",""]);
 inputs.getRange(`B5:L${4+data.metrics.length}`).format = { numberFormat: amountFmt, font: { color: "#008000" } };
 inputs.getRange(`B5:L${4+data.metrics.length}`).format.font.size = financialAmountFontSize;
 inputs.getRange(`O5:O${4+data.metrics.length}`).format = { fill: amber, font: { color: "#0000FF" } };

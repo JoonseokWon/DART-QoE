@@ -8,6 +8,7 @@ import urllib.request
 import zipfile
 from dataclasses import dataclass
 from datetime import date
+from decimal import Decimal, InvalidOperation
 from html import unescape
 from pathlib import Path
 from typing import Any, Callable
@@ -35,14 +36,20 @@ LEASE_WORDS = ("리스부채",)
 
 CANDIDATE_RULES = [
     ("유형자산 처분손익", ("처분이익", "처분손실", "유형자산처분", "매각이익", "매각손실")),
-    ("손상·충당부채", ("손상차손", "손상환입", "충당부채", "대손충당", "재고자산평가손실")),
-    ("소송·재해 등 사건", ("소송", "화재", "재해", "사고", "복구비", "합의금", "과징금")),
+    ("손상·충당부채", ("손상차손", "손상환입", "충당부채전입", "충당부채환입", "대손상각",
+                    "대손충당금전입", "재고자산평가손실", "재고자산평가충당금환입")),
+    ("소송·재해 등 사건", ("소송손실", "화재손실", "재해손실", "사고손실", "복구비", "합의금", "과징금")),
     ("정부보조금", ("정부보조금", "국고보조금", "보조금수익")),
-    ("비영업·중단영업·대규모 기타손익", ("관계기업", "지분법", "중단영업", "기타수익", "기타비용", "잡이익", "잡손실")),
+    ("비영업·중단영업·대규모 기타손익", ("관계기업투자처분이익", "관계기업투자처분손실",
+                                      "지분법이익", "지분법손실", "중단영업",
+                                      "기타수익", "기타비용", "잡이익", "잡손실")),
 ]
 
 ONE_TIME_INCOME_WORDS = ("환입", "처분이익", "매각이익", "이익", "수익", "보조금")
 ONE_TIME_LOSS_WORDS = ("처분손실", "매각손실", "손실", "차손", "비용", "과징금", "합의금", "복구비")
+UNIT_MULTIPLIERS = {"원": 1, "천원": 1_000, "백만원": 1_000_000, "억원": 100_000_000, "조원": 1_000_000_000_000}
+NUMBER_TOKEN_RE = re.compile(r"(?<![\d.])(\(?-?\d{1,3}(?:,\d{3})+(?:\.\d+)?\)?|\(?-?\d+(?:\.\d+)?\)?)(?![\d.])")
+NOTE_CANDIDATE_EXCLUSIONS = ("미처분이익", "이익잉여금처분", "차기이월미처분")
 
 
 class DartError(RuntimeError):
@@ -65,12 +72,92 @@ def _number(value: Any) -> float | None:
 
 
 def _clean_html(text: str) -> str:
+    row_marker = "\u241eDART_QOE_ROW\u241e"
     text = re.sub(r"(?is)<(script|style).*?>.*?</\1>", " ", text)
-    text = re.sub(r"(?i)<br\s*/?>|</p>|</tr>|</div>|</title>", "\n", text)
+    text = re.sub(r"(?i)</tr>", f"\n{row_marker}\n", text)
+    text = re.sub(r"(?i)</t[dh]>", "\t", text)
+    text = re.sub(r"(?i)<br\s*/?>|</p>|</div>|</title>", "\n", text)
     text = re.sub(r"(?s)<[^>]+>", " ", text)
     text = unescape(text).replace("\xa0", " ")
-    text = re.sub(r"[ \t\r\f\v]+", " ", text)
+    # DART XML frequently inserts source-code line breaks between adjacent table
+    # cells. Join those cells before restoring the explicit table-row marker.
+    text = re.sub(r"[ \r\f\v\n]*\t[ \r\f\v\n]*", "\t", text)
+    text = text.replace(row_marker, "\n")
+    text = re.sub(r"[ \r\f\v]+", " ", text)
+    text = re.sub(r" *\t+ *", "\t", text)
     return re.sub(r"\n{2,}", "\n", text).strip()
+
+
+def _nearest_note_unit(lines: list[str], index: int, lookback: int = 30) -> tuple[str, int] | None:
+    for line in reversed(lines[max(0, index - lookback): index + 1]):
+        compact = re.sub(r"\s+", "", line)
+        match = re.search(r"단위[:：]?\(?\s*(조원|억원|백만원|천원|원)\)?", compact)
+        if match:
+            unit = match.group(1)
+            return unit, UNIT_MULTIPLIERS[unit]
+    return None
+
+
+def _token_amount(token: str, multiplier: int) -> int | float | None:
+    negative = token.startswith("(") and token.endswith(")")
+    cleaned = token.strip("()").replace(",", "")
+    try:
+        value = Decimal(cleaned) * multiplier
+    except InvalidOperation:
+        return None
+    if negative:
+        value = -value
+    return int(value) if value == value.to_integral_value() else float(value)
+
+
+def _keyword_original_position(line: str, keyword: str) -> int:
+    compact_chars = []
+    positions = []
+    for position, char in enumerate(line):
+        if not char.isspace():
+            compact_chars.append(char)
+            positions.append(position)
+    compact = "".join(compact_chars)
+    compact_index = compact.find(keyword)
+    return positions[compact_index] if compact_index >= 0 else -1
+
+
+def _extract_note_amount(line: str, keyword: str, year: int, multiplier: int) -> tuple[int | float, str] | None:
+    if "\t" not in line:
+        return None
+    keyword_position = _keyword_original_position(line, keyword)
+    tokens = []
+    for match in NUMBER_TOKEN_RE.finditer(line):
+        token = match.group(1)
+        value = _token_amount(token, multiplier)
+        if value is None or value == 0:
+            continue
+        unscaled = abs(float(value)) / multiplier
+        plain_integer = token.strip("()-").isdigit()
+        if plain_integer and int(unscaled) in {year - 1, year, year + 1}:
+            continue
+        tokens.append((match.start(), value, token))
+    if not tokens:
+        return None
+    after_keyword = [item for item in tokens if keyword_position >= 0 and item[0] > keyword_position]
+    if not after_keyword:
+        return None
+    selected_index = 0
+    # Full financial-statement rows often have the layout
+    # "account | note number | current year | prior year". A small, unformatted
+    # first integer followed by another amount is a note reference, not money.
+    first_token = after_keyword[0][2].strip("()-")
+    next_token = after_keyword[1][2] if len(after_keyword) >= 2 else ""
+    if (
+        len(after_keyword) >= 2
+        and first_token.isdigit()
+        and int(first_token) <= 300
+        and "," not in first_token
+        and "," in next_token
+    ):
+        selected_index = 1
+    selected = after_keyword[selected_index]
+    return selected[1], selected[2]
 
 
 def classify_candidate_profit_loss(account: str, excerpt: str = "", category: str = "") -> str:
@@ -197,13 +284,27 @@ def _sum_accounts(rows: list[dict[str, Any]], words: tuple[str, ...]) -> float |
 
 def _candidate_rows(rows: list[dict[str, Any]], year: int, rcept_no: str | None) -> list[dict[str, Any]]:
     found = []
+    seen = set()
     for row in rows:
         name = row.get("account_nm", "")
+        statement = row.get("sj_div", "")
+        if statement and statement not in {"IS", "CIS"}:
+            continue
+        if "기타포괄손익" in name:
+            continue
+        raw_amount = _number(row.get("thstrm_amount") or row.get("thstrm_add_amount"))
+        if raw_amount is None:
+            continue
+        amount = abs(raw_amount)
         for category, words in CANDIDATE_RULES:
             if any(word in name for word in words):
+                key = (category, re.sub(r"\s+", "", name), amount)
+                if key in seen:
+                    break
+                seen.add(key)
                 found.append({
                     "year": year, "category": category, "account": name,
-                    "amount": _number(row.get("thstrm_amount") or row.get("thstrm_add_amount")),
+                    "amount": amount,
                     "excerpt": "재무제표 계정명 기준 자동 탐지 — 일회성 여부는 원문 주석 확인 필요",
                     "rcept_no": rcept_no or "", "source": "재무제표 API", "status": "확인 필요",
                     "profit_loss_type": classify_candidate_profit_loss(name, category=category),
@@ -218,21 +319,54 @@ def _note_candidates(text: str, year: int, rcept_no: str) -> list[dict[str, Any]
     seen = set()
     for i, line in enumerate(lines):
         compact = re.sub(r"\s+", "", line)
+        if any(excluded in compact for excluded in NOTE_CANDIDATE_EXCLUSIONS):
+            continue
         for category, words in CANDIDATE_RULES:
             hit = next((word for word in words if word in compact), None)
             if not hit:
                 continue
-            excerpt = " ".join(lines[max(0, i - 1): min(len(lines), i + 2)])[:600]
-            key = (category, excerpt[:120])
+            unit_context = _nearest_note_unit(lines, i)
+            if not unit_context:
+                continue
+            unit, multiplier = unit_context
+            amount_result = _extract_note_amount(line, hit, year, multiplier)
+            if not amount_result:
+                continue
+            raw_amount, displayed_amount = amount_result
+            amount = abs(raw_amount)
+            excerpt_body = " | ".join(lines[max(0, i - 1): min(len(lines), i + 2)])
+            excerpt = f"[표시단위: {unit}, 선택 금액: {displayed_amount}] {excerpt_body}"[:600]
+            key = (category, hit, amount)
             if key in seen:
                 continue
             seen.add(key)
-            found.append({"year": year, "category": category, "account": hit, "amount": None,
-                          "excerpt": excerpt, "rcept_no": rcept_no, "source": "사업보고서 원문", "status": "확인 필요",
+            found.append({"year": year, "category": category, "account": hit, "amount": amount,
+                          "excerpt": excerpt, "rcept_no": rcept_no, "source": f"사업보고서 원문·{unit} 환산", "status": "확인 필요",
                           "profit_loss_type": classify_candidate_profit_loss(hit, excerpt, category)})
             if len(found) >= 60:
                 return found
     return found
+
+
+def _deduplicate_candidates(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    result = []
+    positions = {}
+    for candidate in candidates:
+        key = (
+            candidate.get("year"),
+            candidate.get("category"),
+            re.sub(r"\s+", "", candidate.get("account", "")),
+            candidate.get("amount"),
+        )
+        existing_index = positions.get(key)
+        if existing_index is None:
+            positions[key] = len(result)
+            result.append(candidate)
+            continue
+        existing = result[existing_index]
+        if existing.get("source") == "재무제표 API" and candidate.get("source", "").startswith("사업보고서 원문"):
+            result[existing_index] = candidate
+    return result
 
 
 def build_analysis(company: dict[str, str], rows_by_year: dict[int, list[dict[str, Any]]], filings: list[dict[str, Any]], note_texts: dict[int, str], include_lease: bool, basis_by_year: dict[int, str] | None = None) -> dict[str, Any]:
@@ -250,6 +384,7 @@ def build_analysis(company: dict[str, str], rows_by_year: dict[int, list[dict[st
         candidates += _candidate_rows(rows, year, rno)
         if note_texts.get(year):
             candidates += _note_candidates(note_texts[year], year, rno)
+    candidates = _deduplicate_candidates(candidates)
 
     metrics = []
     for i, year in enumerate(years):
@@ -289,7 +424,8 @@ def build_analysis(company: dict[str, str], rows_by_year: dict[int, list[dict[st
                      "include_lease": include_lease, "created": date.today().isoformat()},
         "years": years, "metrics": metrics, "candidates": candidates,
         "filings": filings,
-        "limitations": ["자동 탐지 결과는 정상화 조정 확정값이 아닙니다.", "계정명·키워드 후보는 원문 주석 및 경영진 설명과 대조해야 합니다.",
+        "limitations": ["자동 탐지 결과는 정상화 조정 확정값이 아닙니다.", "원문 주석 후보는 표시단위와 금액을 같은 표 행에서 확인한 경우에만 제시합니다.",
+                        "계정명·키워드 후보는 원문 주석 및 경영진 설명과 대조해야 합니다.",
                         "회전일수는 기초 비교값이 없을 때 기말잔액을 사용합니다.", "상각전영업이익 배수는 감가상각비·무형자산상각비의 신뢰성 확보 전까지 개념검증 범위에서 제외했습니다."],
     }
 

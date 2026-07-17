@@ -1,7 +1,17 @@
 import unittest
 from unittest.mock import patch
 
-from qoe import DartClient, DartError, analyze_dart, classify_candidate_profit_loss, demo_analysis
+from qoe import (
+    DartClient,
+    DartError,
+    _candidate_rows,
+    _clean_html,
+    _deduplicate_candidates,
+    _note_candidates,
+    analyze_dart,
+    classify_candidate_profit_loss,
+    demo_analysis,
+)
 
 
 class DemoAnalysisTests(unittest.TestCase):
@@ -10,6 +20,75 @@ class DemoAnalysisTests(unittest.TestCase):
         self.assertEqual(classify_candidate_profit_loss("손상차손"), "일회성 손실")
         self.assertEqual(classify_candidate_profit_loss("손상환입"), "일회성 이익")
         self.assertEqual(classify_candidate_profit_loss("관계기업투자"), "확인 필요")
+
+    def test_note_candidates_require_and_convert_disclosed_amounts(self):
+        note = """
+        23. 기타수익 및 기타비용
+        (단위: 백만원)
+        구분\t2024\t2023
+        유형자산처분이익\t1,234\t500
+        손상차손\t(250)\t100
+        기타수익은 당기손익으로 표시합니다.
+        """
+        candidates = _note_candidates(note, 2024, "202500000001")
+        amounts = {item["account"]: item["amount"] for item in candidates}
+        self.assertEqual(amounts["처분이익"], 1_234_000_000)
+        self.assertEqual(amounts["손상차손"], 250_000_000)
+        self.assertTrue(all(item["amount"] is not None for item in candidates))
+        self.assertFalse(any("기타수익" == item["account"] for item in candidates))
+
+    def test_note_candidates_skip_keywords_without_amount_or_unit(self):
+        note = "회사는 관계기업 투자와 충당부채 및 기타수익에 관한 회계정책을 적용합니다."
+        self.assertEqual(_note_candidates(note, 2024, "202500000001"), [])
+
+    def test_candidate_rows_use_profit_and_loss_statements_and_deduplicate(self):
+        rows = [
+            {"sj_div": "BS", "account_nm": "충당부채", "thstrm_amount": "1000"},
+            {"sj_div": "CF", "account_nm": "관계기업 투자 취득", "thstrm_amount": "2000"},
+            {"sj_div": "IS", "account_nm": "유형자산처분이익", "thstrm_amount": "3000"},
+            {"sj_div": "IS", "account_nm": "유형자산처분이익", "thstrm_amount": "3000"},
+            {"sj_div": "IS", "account_nm": "손상차손", "thstrm_amount": None},
+        ]
+        candidates = _candidate_rows(rows, 2024, "202500000001")
+        self.assertEqual(len(candidates), 1)
+        self.assertEqual(candidates[0]["account"], "유형자산처분이익")
+        self.assertEqual(candidates[0]["amount"], 3000)
+
+    def test_note_candidate_replaces_duplicate_api_candidate(self):
+        base = {"year": 2024, "category": "기타손익", "account": "기타수익", "amount": 1_000}
+        candidates = _deduplicate_candidates([
+            {**base, "source": "재무제표 API"},
+            {**base, "source": "사업보고서 원문·백만원 환산"},
+        ])
+        self.assertEqual(len(candidates), 1)
+        self.assertEqual(candidates[0]["source"], "사업보고서 원문·백만원 환산")
+
+    def test_clean_html_preserves_table_cell_separators(self):
+        cleaned = _clean_html(
+            "<table><tr>\n<td>유형자산처분이익</td>\n<td>1,234</td>\n</tr>"
+            "<tr><td>손상차손</td><td>(250)</td></tr></table>"
+        )
+        self.assertIn("유형자산처분이익\t1,234", cleaned)
+        self.assertIn("손상차손\t(250)", cleaned)
+        self.assertNotIn("1,234\t손상차손", cleaned)
+
+    def test_note_candidates_ignore_amount_like_numbers_in_prose(self):
+        note = """
+        (단위: 백만원)
+        회사는 2024년에 기타수익 1,234와 관련한 회계정책을 검토했습니다.
+        """
+        self.assertEqual(_note_candidates(note, 2024, "202500000001"), [])
+
+    def test_note_candidates_skip_note_number_and_false_substring(self):
+        note = """
+        (단위: 백만원)
+        기타수익\t23\t7,359,004\t797,494
+        미처분이익잉여금\t23,614,523\t8,401,233
+        """
+        candidates = _note_candidates(note, 2021, "20220308000798")
+        self.assertEqual(len(candidates), 1)
+        self.assertEqual(candidates[0]["account"], "기타수익")
+        self.assertEqual(candidates[0]["amount"], 7_359_004_000_000)
 
     def setUp(self):
         self.data = demo_analysis()
