@@ -41,21 +41,19 @@ def build_icon() -> Image.Image:
     canvas.alpha_composite(Image.composite(gradient, Image.new("RGBA", (SIZE, SIZE)), mask))
     draw = ImageDraw.Draw(canvas)
 
-    # Compact monogram remains readable in Explorer's 32 px icon view.
-    monogram_font = font(360)
-    draw.text((132, 158), "D", font=monogram_font, fill=(255, 255, 255, 255), stroke_width=3)
-    draw.text((500, 158), "Q", font=monogram_font, fill=(66, 199, 219, 255), stroke_width=3)
-
-    # QoE-style performance line: uneven conversion followed by a clear rise.
-    points = [(190, 760), (385, 660), (565, 715), (810, 505)]
-    draw.line(points, fill=(255, 255, 255, 255), width=48, joint="curve")
-    for x, y in points[:-1]:
-        draw.ellipse((x - 30, y - 30, x + 30, y + 30), fill=(66, 199, 219, 255), outline=(255, 255, 255, 255), width=12)
-    end_x, end_y = points[-1]
-    draw.polygon(
-        [(end_x + 82, end_y - 72), (end_x + 40, end_y + 52), (end_x - 55, end_y - 40)],
-        fill=(66, 199, 219, 255),
-    )
+    # Keep only the DQ monogram so it remains distinct in Explorer's 16–32 px views.
+    monogram_font = font(470)
+    d_box = draw.textbbox((0, 0), "D", font=monogram_font, stroke_width=3)
+    q_box = draw.textbbox((0, 0), "Q", font=monogram_font, stroke_width=3)
+    gap = 34
+    total_width = (d_box[2] - d_box[0]) + gap + (q_box[2] - q_box[0])
+    top = (SIZE - max(d_box[3] - d_box[1], q_box[3] - q_box[1])) // 2
+    d_x = (SIZE - total_width) // 2 - d_box[0]
+    d_y = top - d_box[1]
+    q_x = d_x + (d_box[2] - d_box[0]) + gap - q_box[0]
+    q_y = top - q_box[1]
+    draw.text((d_x, d_y), "D", font=monogram_font, fill=(255, 255, 255, 255), stroke_width=3)
+    draw.text((q_x, q_y), "Q", font=monogram_font, fill=(66, 199, 219, 255), stroke_width=3)
     return canvas
 
 
