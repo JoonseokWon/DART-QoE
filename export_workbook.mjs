@@ -147,6 +147,16 @@ netDebt.freezePanes.freezeRows(4);
 widths(netDebt,{A:34});
 
 title(candidates, "검토 후보 | 일회성 손익·정상화 조정 검토 (결론 아님)", "N");
+candidates.getRange("A3:B3").merge();
+candidates.getRange("A3").values=[["전체 조정 여부"]];
+candidates.getRange("A3:B3").format={fill:pale,font:{bold:true},verticalAlignment:"center"};
+candidates.getRange("C3").values=[["아니요"]];
+candidates.getRange("C3").dataValidation={rule:{type:"list",values:["예","아니요"]}};
+candidates.getRange("C3").format={fill:amber,font:{bold:true,color:"#0000FF"},horizontalAlignment:"center",verticalAlignment:"center",borders:{preset:"outside",style:"thin",color:blue}};
+candidates.getRange("D3:N3").merge();
+candidates.getRange("D3").values=[["여기서 예/아니요를 선택하면 모든 후보에 적용됩니다. 이후 필요한 행만 조정 여부를 개별 수정할 수 있습니다."]];
+candidates.getRange("D3:N3").format={fill:grey,font:{italic:true,color:"#595959"},wrapText:true,verticalAlignment:"center"};
+candidates.getRange("A3:N3").format.rowHeight=26;
 const candHeaders=["연도","유형","계정/키워드","자동 추출 금액","원문 발췌","접수번호","DART 원문","추출 방식","자동 추출","검토 상태","손익 구분(자동)","조정 여부","적용 금액","조정 사유"];
 candidates.getRange("A4:N4").values=[candHeaders]; header(candidates.getRange("A4:N4"));
 const candEnd=4+Math.max((data.candidates||[]).slice(0,200).length,1);
@@ -168,6 +178,10 @@ const classifyProfitLoss=x=>{
 const adjustmentChoice=x=>["예","조정"].includes(x.user_adjustment)?"예":"아니요";
 const candRows=(data.candidates||[]).slice(0,200).map(x=>[x.year,x.category,x.account,x.amount,x.excerpt,x.rcept_no||"",x.rcept_no?`https://dart.fss.or.kr/dsaf001/main.do?rcpNo=${x.rcept_no}`:"",x.source,"예",x.status,classifyProfitLoss(x),adjustmentChoice(x),x.applied_amount??x.amount,x.adjustment_reason||""]);
 if(candRows.length) candidates.getRange(`A5:N${4+candRows.length}`).values=candRows;
+if(candRows.length){
+  candidates.getRange("L5").formulas=[["=$C$3"]];
+  candidates.getRange(`L5:L${4+candRows.length}`).fillDown();
+}
 candidates.getRange(`D5:D${candEnd}`).format.numberFormat=amountFmt; candidates.getRange(`E5:E${candEnd}`).format={wrapText:true,rowHeight:34};
 candidates.getRange(`M5:M${candEnd}`).format.numberFormat=amountFmt;
 candidates.getRange(`D5:D${candEnd}`).format.font.size=financialAmountFontSize;
