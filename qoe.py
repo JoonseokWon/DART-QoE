@@ -37,16 +37,35 @@ LEASE_WORDS = ("리스부채",)
 CANDIDATE_RULES = [
     ("유형자산 처분손익", ("처분이익", "처분손실", "유형자산처분", "매각이익", "매각손실")),
     ("손상·충당부채", ("손상차손", "손상환입", "충당부채전입", "충당부채환입", "대손상각",
-                    "대손충당금전입", "재고자산평가손실", "재고자산평가충당금환입")),
+                    "대손충당금전입", "재고자산평가손실", "재고자산평가충당금환입",
+                    "품질보증충당부채", "판매보증충당부채")),
     ("소송·재해 등 사건", ("소송손실", "화재손실", "재해손실", "사고손실", "복구비", "합의금", "과징금")),
+    ("구조조정·거래 관련 비용", ("구조조정", "희망퇴직", "명예퇴직", "퇴직위로금", "기업결합관련비용",
+                              "합병관련비용", "인수관련비용", "거래관련비용", "통합비용")),
     ("정부보조금", ("정부보조금", "국고보조금", "보조금수익")),
     ("비영업·중단영업·대규모 기타손익", ("관계기업투자처분이익", "관계기업투자처분손실",
                                       "지분법이익", "지분법손실", "중단영업",
                                       "기타수익", "기타비용", "잡이익", "잡손실")),
 ]
 
-ONE_TIME_INCOME_WORDS = ("환입", "처분이익", "매각이익", "이익", "수익", "보조금")
-ONE_TIME_LOSS_WORDS = ("처분손실", "매각손실", "손실", "차손", "비용", "과징금", "합의금", "복구비")
+INCOME_WORDS = ("환입", "처분이익", "매각이익", "이익", "수익", "보조금")
+LOSS_WORDS = ("처분손실", "매각손실", "손실", "차손", "비용", "과징금", "합의금", "복구비")
+RECURRING_LIKELY_WORDS = (
+    "재고자산평가손실", "재고자산평가충당금환입", "대손상각", "대손충당금전입",
+    "품질보증충당부채", "판매보증충당부채", "지분법이익", "지분법손실",
+)
+ONE_TIME_LIKELY_WORDS = (
+    "중단영업", "소송손실", "화재손실", "재해손실", "사고손실", "합의금", "과징금",
+    "구조조정", "희망퇴직", "명예퇴직", "퇴직위로금", "기업결합관련비용",
+    "합병관련비용", "인수관련비용", "거래관련비용", "통합비용",
+)
+OPERATING_SCOPE_WORDS = (
+    "재고자산평가손실", "재고자산평가충당금환입", "대손상각", "대손충당금전입",
+    "품질보증충당부채", "판매보증충당부채",
+)
+NET_INCOME_SCOPE_WORDS = (
+    "관계기업", "지분법", "중단영업", "금융수익", "금융비용", "기타수익", "기타비용",
+)
 UNIT_MULTIPLIERS = {"원": 1, "천원": 1_000, "백만원": 1_000_000, "억원": 100_000_000, "조원": 1_000_000_000_000}
 NUMBER_TOKEN_RE = re.compile(r"(?<![\d.])(\(?-?\d{1,3}(?:,\d{3})+(?:\.\d+)?\)?|\(?-?\d+(?:\.\d+)?\)?)(?![\d.])")
 NOTE_CANDIDATE_EXCLUSIONS = ("미처분이익", "이익잉여금처분", "차기이월미처분")
@@ -161,19 +180,48 @@ def _extract_note_amount(line: str, keyword: str, year: int, multiplier: int) ->
 
 
 def classify_candidate_profit_loss(account: str, excerpt: str = "", category: str = "") -> str:
-    """Classify the adjustment sign from the detected account, without user-entered direction."""
+    """Classify only the P&L direction; recurrence is evaluated separately."""
     account_text = re.sub(r"\s+", "", account or "")
     excerpt_text = re.sub(r"\s+", "", excerpt or "")
     for text in (account_text, excerpt_text):
-        if any(word in text for word in ONE_TIME_INCOME_WORDS):
-            return "일회성 이익"
-        if any(word in text for word in ONE_TIME_LOSS_WORDS):
-            return "일회성 손실"
+        if any(word in text for word in INCOME_WORDS):
+            return "이익"
+        if any(word in text for word in LOSS_WORDS):
+            return "손실"
     if category == "정부보조금":
-        return "일회성 이익"
-    if category == "소송·재해 등 사건":
-        return "일회성 손실"
+        return "이익"
+    if category in {"소송·재해 등 사건", "구조조정·거래 관련 비용"}:
+        return "손실"
     return "확인 필요"
+
+
+def classify_recurrence_hint(account: str, excerpt: str = "", category: str = "") -> str:
+    """Provide a conservative recurrence hint without deciding the user's adjustment."""
+    account_text = re.sub(r"\s+", "", account or "")
+    excerpt_text = re.sub(r"\s+", "", excerpt or "")
+    if any(word in account_text for word in RECURRING_LIKELY_WORDS):
+        return "반복 가능"
+    if any(word in account_text for word in ONE_TIME_LIKELY_WORDS):
+        return "일회성 가능"
+    if category == "정부보조금":
+        return "반복 가능"
+    if category in {"소송·재해 등 사건", "구조조정·거래 관련 비용"} and any(
+        word in excerpt_text for word in ONE_TIME_LIKELY_WORDS
+    ):
+        return "일회성 가능"
+    return "확인 필요"
+
+
+def classify_normalization_scope(account: str, category: str = "") -> str:
+    """Suggest which normalized metric could use the item; the user may override it."""
+    account_text = re.sub(r"\s+", "", account or "")
+    if any(word in account_text for word in OPERATING_SCOPE_WORDS):
+        return "영업이익"
+    if any(word in account_text for word in NET_INCOME_SCOPE_WORDS):
+        return "순이익"
+    if category == "비영업·중단영업·대규모 기타손익":
+        return "순이익"
+    return "미결정"
 
 
 @dataclass
@@ -308,6 +356,8 @@ def _candidate_rows(rows: list[dict[str, Any]], year: int, rcept_no: str | None)
                     "excerpt": "재무제표 계정명 기준 자동 탐지 — 일회성 여부는 원문 주석 확인 필요",
                     "rcept_no": rcept_no or "", "source": "재무제표 API", "status": "확인 필요",
                     "profit_loss_type": classify_candidate_profit_loss(name, category=category),
+                    "recurrence_hint": classify_recurrence_hint(name, category=category),
+                    "normalization_scope": classify_normalization_scope(name, category),
                 })
                 break
     return found
@@ -342,7 +392,9 @@ def _note_candidates(text: str, year: int, rcept_no: str) -> list[dict[str, Any]
             seen.add(key)
             found.append({"year": year, "category": category, "account": hit, "amount": amount,
                           "excerpt": excerpt, "rcept_no": rcept_no, "source": f"사업보고서 원문·{unit} 환산", "status": "확인 필요",
-                          "profit_loss_type": classify_candidate_profit_loss(hit, excerpt, category)})
+                          "profit_loss_type": classify_candidate_profit_loss(hit, excerpt, category),
+                          "recurrence_hint": classify_recurrence_hint(hit, excerpt, category),
+                          "normalization_scope": classify_normalization_scope(hit, category)})
             if len(found) >= 60:
                 return found
     return found
@@ -424,7 +476,9 @@ def build_analysis(company: dict[str, str], rows_by_year: dict[int, list[dict[st
                      "include_lease": include_lease, "created": date.today().isoformat()},
         "years": years, "metrics": metrics, "candidates": candidates,
         "filings": filings,
-        "limitations": ["자동 탐지 결과는 정상화 조정 확정값이 아닙니다.", "원문 주석 후보는 표시단위와 금액을 같은 표 행에서 확인한 경우에만 제시합니다.",
+        "limitations": ["자동 탐지 결과는 정상화 조정 확정값이 아닙니다.", "반복성 힌트와 정상화 대상은 계정명 기준 초기값이며 사용자가 원문과 발생 원인을 확인해야 합니다.",
+                        "정상화 영업이익은 사용자가 일회성·영업이익·조정 예로 판단한 항목만 반영합니다.",
+                        "원문 주석 후보는 표시단위와 금액을 같은 표 행에서 확인한 경우에만 제시합니다.",
                         "계정명·키워드 후보는 원문 주석 및 경영진 설명과 대조해야 합니다.",
                         "회전일수는 기초 비교값이 없을 때 기말잔액을 사용합니다.", "상각전영업이익 배수는 감가상각비·무형자산상각비의 신뢰성 확보 전까지 개념검증 범위에서 제외했습니다."],
     }
@@ -458,10 +512,10 @@ def demo_analysis() -> dict[str, Any]:
     data["candidates"] = [
         {"year": 2024, "category": "유형자산 처분손익", "account": "유형자산처분이익", "amount": 2_100_000_000,
          "excerpt": "유휴 생산설비 매각으로 유형자산처분이익을 인식함. 반복성 및 매각 배경 확인 필요.", "rcept_no": filings[-1]["rcept_no"], "source": "샘플 원문", "status": "확인 필요",
-         "profit_loss_type": "일회성 이익"},
+         "profit_loss_type": "이익", "recurrence_hint": "확인 필요", "normalization_scope": "미결정"},
         {"year": 2024, "category": "정부보조금", "account": "정부보조금수익", "amount": 850_000_000,
          "excerpt": "설비투자 지원 관련 정부보조금이 기타수익에 포함됨. 지속 조건과 표시 분류 확인 필요.", "rcept_no": filings[-1]["rcept_no"], "source": "샘플 원문", "status": "확인 필요",
-         "profit_loss_type": "일회성 이익"},
+         "profit_loss_type": "이익", "recurrence_hint": "반복 가능", "normalization_scope": "미결정"},
     ]
     return data
 

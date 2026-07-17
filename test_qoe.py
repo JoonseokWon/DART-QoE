@@ -9,17 +9,28 @@ from qoe import (
     _deduplicate_candidates,
     _note_candidates,
     analyze_dart,
+    classify_normalization_scope,
     classify_candidate_profit_loss,
+    classify_recurrence_hint,
     demo_analysis,
 )
 
 
 class DemoAnalysisTests(unittest.TestCase):
     def test_candidate_profit_loss_classification(self):
-        self.assertEqual(classify_candidate_profit_loss("유형자산처분이익"), "일회성 이익")
-        self.assertEqual(classify_candidate_profit_loss("손상차손"), "일회성 손실")
-        self.assertEqual(classify_candidate_profit_loss("손상환입"), "일회성 이익")
+        self.assertEqual(classify_candidate_profit_loss("유형자산처분이익"), "이익")
+        self.assertEqual(classify_candidate_profit_loss("손상차손"), "손실")
+        self.assertEqual(classify_candidate_profit_loss("손상환입"), "이익")
         self.assertEqual(classify_candidate_profit_loss("관계기업투자"), "확인 필요")
+
+    def test_recurrence_and_normalization_scope_are_separate(self):
+        self.assertEqual(classify_recurrence_hint("재고자산평가손실"), "반복 가능")
+        self.assertEqual(classify_recurrence_hint("대손상각비"), "반복 가능")
+        self.assertEqual(classify_recurrence_hint("중단영업손실"), "일회성 가능")
+        self.assertEqual(classify_recurrence_hint("유형자산처분이익"), "확인 필요")
+        self.assertEqual(classify_normalization_scope("재고자산평가손실"), "영업이익")
+        self.assertEqual(classify_normalization_scope("지분법이익"), "순이익")
+        self.assertEqual(classify_normalization_scope("유형자산처분이익"), "미결정")
 
     def test_note_candidates_require_and_convert_disclosed_amounts(self):
         note = """
@@ -48,11 +59,13 @@ class DemoAnalysisTests(unittest.TestCase):
             {"sj_div": "IS", "account_nm": "유형자산처분이익", "thstrm_amount": "3000"},
             {"sj_div": "IS", "account_nm": "유형자산처분이익", "thstrm_amount": "3000"},
             {"sj_div": "IS", "account_nm": "손상차손", "thstrm_amount": None},
+            {"sj_div": "IS", "account_nm": "기업결합관련비용", "thstrm_amount": "5000"},
         ]
         candidates = _candidate_rows(rows, 2024, "202500000001")
-        self.assertEqual(len(candidates), 1)
+        self.assertEqual(len(candidates), 2)
         self.assertEqual(candidates[0]["account"], "유형자산처분이익")
         self.assertEqual(candidates[0]["amount"], 3000)
+        self.assertEqual(candidates[1]["recurrence_hint"], "일회성 가능")
 
     def test_note_candidate_replaces_duplicate_api_candidate(self):
         base = {"year": 2024, "category": "기타손익", "account": "기타수익", "amount": 1_000}
