@@ -221,10 +221,25 @@ def build_result_summary(data: dict) -> str:
             f"{nwc_change * 100:.1f}%p 상승했습니다."
         )
     if latest_net_debt is not None and first_net_debt is not None and latest_net_debt > first_net_debt:
-        review_points.append(
-            f"순차입금이 {first_year}년에서 {latest_year}년으로 "
-            f"{_format_amount(latest_net_debt - first_net_debt)} 증가했습니다."
-        )
+        funding_change = latest_net_debt - first_net_debt
+        if first_net_debt >= 0:
+            review_points.append(
+                f"순차입금이 {first_year}년 {_format_amount(first_net_debt)}에서 "
+                f"{latest_year}년 {_format_amount(latest_net_debt)}으로 "
+                f"{_format_amount(funding_change)} 증가했습니다."
+            )
+        elif latest_net_debt < 0:
+            review_points.append(
+                f"순현금이 {first_year}년 {_format_amount(abs(first_net_debt))}에서 "
+                f"{latest_year}년 {_format_amount(abs(latest_net_debt))}으로 "
+                f"{_format_amount(funding_change)} 감소했습니다."
+            )
+        else:
+            review_points.append(
+                f"자금 상태가 {first_year}년 순현금 {_format_amount(abs(first_net_debt))}에서 "
+                f"{latest_year}년 순차입금 {_format_amount(latest_net_debt)}으로 전환되어, "
+                f"순차입금 기준 {_format_amount(funding_change)} 증가했습니다."
+            )
     if candidates:
         review_points.append("조정 후보는 확정 조정이 아니므로 금액·반복 여부·원문 맥락을 확인하세요.")
     if not review_points:

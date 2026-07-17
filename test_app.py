@@ -49,6 +49,10 @@ class ResultSummaryTests(unittest.TestCase):
         self.assertIn("자금 상태: 2024년", summary)
         self.assertIn("정상화 조정 검토 후보: 2건", summary)
         self.assertIn("[추가 확인 포인트]", summary)
+        self.assertIn(
+            "순차입금이 2022년 150.0억원에서 2024년 330.0억원으로 180.0억원 증가했습니다.",
+            summary,
+        )
         self.assertNotIn("저장 위치", summary)
 
 
