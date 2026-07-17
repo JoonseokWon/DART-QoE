@@ -1,10 +1,16 @@
 import unittest
 from unittest.mock import patch
 
-from qoe import DartClient, DartError, analyze_dart, demo_analysis
+from qoe import DartClient, DartError, analyze_dart, classify_candidate_profit_loss, demo_analysis
 
 
 class DemoAnalysisTests(unittest.TestCase):
+    def test_candidate_profit_loss_classification(self):
+        self.assertEqual(classify_candidate_profit_loss("유형자산처분이익"), "일회성 이익")
+        self.assertEqual(classify_candidate_profit_loss("손상차손"), "일회성 손실")
+        self.assertEqual(classify_candidate_profit_loss("손상환입"), "일회성 이익")
+        self.assertEqual(classify_candidate_profit_loss("관계기업투자"), "확인 필요")
+
     def setUp(self):
         self.data = demo_analysis()
 

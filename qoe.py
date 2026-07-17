@@ -41,6 +41,9 @@ CANDIDATE_RULES = [
     ("비영업·중단영업·대규모 기타손익", ("관계기업", "지분법", "중단영업", "기타수익", "기타비용", "잡이익", "잡손실")),
 ]
 
+ONE_TIME_INCOME_WORDS = ("환입", "처분이익", "매각이익", "이익", "수익", "보조금")
+ONE_TIME_LOSS_WORDS = ("처분손실", "매각손실", "손실", "차손", "비용", "과징금", "합의금", "복구비")
+
 
 class DartError(RuntimeError):
     pass
@@ -68,6 +71,22 @@ def _clean_html(text: str) -> str:
     text = unescape(text).replace("\xa0", " ")
     text = re.sub(r"[ \t\r\f\v]+", " ", text)
     return re.sub(r"\n{2,}", "\n", text).strip()
+
+
+def classify_candidate_profit_loss(account: str, excerpt: str = "", category: str = "") -> str:
+    """Classify the adjustment sign from the detected account, without user-entered direction."""
+    account_text = re.sub(r"\s+", "", account or "")
+    excerpt_text = re.sub(r"\s+", "", excerpt or "")
+    for text in (account_text, excerpt_text):
+        if any(word in text for word in ONE_TIME_INCOME_WORDS):
+            return "일회성 이익"
+        if any(word in text for word in ONE_TIME_LOSS_WORDS):
+            return "일회성 손실"
+    if category == "정부보조금":
+        return "일회성 이익"
+    if category == "소송·재해 등 사건":
+        return "일회성 손실"
+    return "확인 필요"
 
 
 @dataclass
@@ -187,6 +206,7 @@ def _candidate_rows(rows: list[dict[str, Any]], year: int, rcept_no: str | None)
                     "amount": _number(row.get("thstrm_amount") or row.get("thstrm_add_amount")),
                     "excerpt": "재무제표 계정명 기준 자동 탐지 — 일회성 여부는 원문 주석 확인 필요",
                     "rcept_no": rcept_no or "", "source": "재무제표 API", "status": "확인 필요",
+                    "profit_loss_type": classify_candidate_profit_loss(name, category=category),
                 })
                 break
     return found
@@ -208,7 +228,8 @@ def _note_candidates(text: str, year: int, rcept_no: str) -> list[dict[str, Any]
                 continue
             seen.add(key)
             found.append({"year": year, "category": category, "account": hit, "amount": None,
-                          "excerpt": excerpt, "rcept_no": rcept_no, "source": "사업보고서 원문", "status": "확인 필요"})
+                          "excerpt": excerpt, "rcept_no": rcept_no, "source": "사업보고서 원문", "status": "확인 필요",
+                          "profit_loss_type": classify_candidate_profit_loss(hit, excerpt, category)})
             if len(found) >= 60:
                 return found
     return found
@@ -300,9 +321,11 @@ def demo_analysis() -> dict[str, Any]:
             "net_debt": v["debt"] + v["lease"] - v["cash"]})
     data["candidates"] = [
         {"year": 2024, "category": "유형자산 처분손익", "account": "유형자산처분이익", "amount": 2_100_000_000,
-         "excerpt": "유휴 생산설비 매각으로 유형자산처분이익을 인식함. 반복성 및 매각 배경 확인 필요.", "rcept_no": filings[-1]["rcept_no"], "source": "샘플 원문", "status": "확인 필요"},
+         "excerpt": "유휴 생산설비 매각으로 유형자산처분이익을 인식함. 반복성 및 매각 배경 확인 필요.", "rcept_no": filings[-1]["rcept_no"], "source": "샘플 원문", "status": "확인 필요",
+         "profit_loss_type": "일회성 이익"},
         {"year": 2024, "category": "정부보조금", "account": "정부보조금수익", "amount": 850_000_000,
-         "excerpt": "설비투자 지원 관련 정부보조금이 기타수익에 포함됨. 지속 조건과 표시 분류 확인 필요.", "rcept_no": filings[-1]["rcept_no"], "source": "샘플 원문", "status": "확인 필요"},
+         "excerpt": "설비투자 지원 관련 정부보조금이 기타수익에 포함됨. 지속 조건과 표시 분류 확인 필요.", "rcept_no": filings[-1]["rcept_no"], "source": "샘플 원문", "status": "확인 필요",
+         "profit_loss_type": "일회성 이익"},
     ]
     return data
 
