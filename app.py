@@ -205,8 +205,13 @@ def build_result_summary(data: dict) -> str:
         debt_text = "확인 불가"
     elif latest_net_debt < 0:
         debt_text = f"순현금 {_format_amount(abs(latest_net_debt))}"
+    elif latest_net_debt > 0:
+        debt_text = (
+            f"순현금 {_format_amount(-latest_net_debt)} "
+            f"(순차입금 {_format_amount(latest_net_debt)})"
+        )
     else:
-        debt_text = f"순차입금 {_format_amount(latest_net_debt)}"
+        debt_text = "순현금 0원"
 
     category_counts = Counter(item.get("category", "기타") for item in candidates)
     top_categories = ", ".join(f"{name} {count}건" for name, count in category_counts.most_common(3))

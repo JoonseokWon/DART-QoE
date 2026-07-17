@@ -46,7 +46,7 @@ class ResultSummaryTests(unittest.TestCase):
         self.assertIn("영업이익률: 2022년", summary)
         self.assertIn("영업현금 전환율: 2024년", summary)
         self.assertIn("매출 대비 순운전자본: 2024년", summary)
-        self.assertIn("자금 상태: 2024년", summary)
+        self.assertIn("자금 상태: 2024년 순현금 -330.0억원 (순차입금 330.0억원)", summary)
         self.assertIn("정상화 조정 검토 후보: 2건", summary)
         self.assertIn("[추가 확인 포인트]", summary)
         self.assertIn(
