@@ -10,6 +10,7 @@ const cover = wb.worksheets.add("표지");
 const inputs = wb.worksheets.add("원천 자료");
 const summary = wb.worksheets.add("QoE 요약");
 const wc = wb.worksheets.add("운전자본");
+const netDebt = wb.worksheets.add("순차입금");
 const candidates = wb.worksheets.add("검토 후보");
 const audit = wb.worksheets.add("검토 흔적");
 const checks = wb.worksheets.add("검증");
@@ -18,6 +19,7 @@ const navy = "#112A46", blue = "#2F5597", pale = "#DDEBF7", green = "#E2F0D9", a
 const amountFmt = '#,##0;[Red](#,##0);-';
 const pctFmt = '0.0%;[Red](0.0%);-';
 const daysFmt = '0.0"일";[Red](0.0"일");-';
+const multipleFmt = '0.0x;[Red](0.0x);-';
 function title(sheet, text, endCol="H") {
   sheet.showGridLines = false;
   sheet.getRange(`A1:${endCol}2`).merge();
@@ -52,7 +54,7 @@ cover.getRange("D5:J9").format = { wrapText: true, verticalAlignment: "top", fil
 cover.getRange("D11:J11").merge(); cover.getRange("D11").values = [["색상: 파랑=사용자 입력 · 초록=시트 간 연결 · 검정=계산식 · 노랑=확인 필요"]];
 cover.getRange("D11:J11").format = { fill: amber, font: { italic: true } };
 cover.getRange("A14:J14").merge(); cover.getRange("A14").values = [["사용 순서"]]; header(cover.getRange("A14:J14"));
-cover.getRange("A15:J18").merge(); cover.getRange("A15").values = [["1) QoE 요약에서 이익·현금흐름 추이를 확인합니다.  2) 운전자본에서 회전일수와 매출 대비 운전자본 변화를 봅니다.  3) 검토 후보에서 자동 탐지 항목의 원문을 확인하고 사용자 조정 여부·사유를 기록합니다.  4) 검토 흔적과 검증에서 출처·산식·오류를 확인합니다."]];
+cover.getRange("A15:J18").merge(); cover.getRange("A15").values = [["1) QoE 요약에서 이익·현금흐름 추이를 확인합니다.  2) 운전자본에서 회전일수와 매출 대비 운전자본 변화를 봅니다.  3) 순차입금에서 현금·차입금·리스부채 구성과 증감을 확인합니다.  4) 검토 후보에서 자동 탐지 항목의 원문을 확인하고 사용자 조정 여부·사유를 기록합니다.  5) 검토 흔적과 검증에서 출처·산식·오류를 확인합니다."]];
 cover.getRange("A15:J18").format = { wrapText: true, verticalAlignment: "top" };
 widths(cover, {A:20,B:22,C:3,D:17,E:17,F:17,G:17,H:17,I:17,J:17});
 
@@ -107,6 +109,35 @@ wc.getRange(`A14:${wcEndCol}14`).merge(); wc.getRange("A14").values=[["운전자
 wc.freezePanes.freezeRows(4); widths(wc,{A:36,B:18,C:18,D:18,E:18,F:18,G:16,H:16,I:16,J:16});
 data.years.forEach((_,i)=>{ const c=excelCol(2+i); wc.getRange(`${c}:${c}`).format.columnWidth=22; });
 
+const netDebtEndCol = excelCol(Math.max(1 + data.years.length, 8));
+title(netDebt, "순차입금 | 현금·차입금·리스부채 구성", netDebtEndCol);
+netDebt.getRange("A4").values = [["지표"]];
+netDebt.getRange("A5:A12").values = [["현금및현금성자산"],["차입금·사채"],["리스부채"],["순차입금 산정 대상 부채"],["순차입금"],["순현금"],["전년 대비 순차입금 증감"],["산정 대상 부채/현금"]];
+netDebt.getRange(`B4:${lastCol}4`).values=[data.years];
+netDebt.getRange(`B4:${lastCol}4`).format={fill:pale,font:{bold:true},horizontalAlignment:"right"};
+data.years.forEach((_,i)=>{ const c=excelCol(2+i), src=5+i, prev=excelCol(1+i);
+  netDebt.getRange(`${c}5:${c}12`).formulas=[
+    [`='원천 자료'!I${src}`],
+    [`='원천 자료'!K${src}`],
+    [`='원천 자료'!L${src}`],
+    [`=${c}6+IF('표지'!$B$10="순차입금에 포함",${c}7,0)`],
+    [`=${c}8-${c}5`],
+    [`=${c}5-${c}8`],
+    [i?`=${c}9-${prev}9`:""],
+    [`=IFERROR(${c}8/${c}5,"")`],
+  ];
+  netDebt.getRange(`${c}:${c}`).format.columnWidth=22;
+});
+netDebt.getRange(`B5:${lastCol}11`).format.numberFormat=amountFmt;
+netDebt.getRange(`B12:${lastCol}12`).format.numberFormat=multipleFmt;
+netDebt.getRange(`A8:${lastCol}8`).format.borders={top:{style:"thin",color:navy}};
+netDebt.getRange(`A9:${lastCol}10`).format={fill:pale,font:{bold:true,color:"#000000"}};
+netDebt.getRange(`A14:${netDebtEndCol}14`).merge();
+netDebt.getRange("A14").values=[["순차입금 = 차입금·사채 + 선택 시 리스부채 - 현금및현금성자산입니다. 순현금은 부호를 반대로 표시하며, 리스부채 포함 여부는 표지의 선택값과 연결됩니다."]];
+netDebt.getRange(`A14:${netDebtEndCol}14`).format={fill:amber,wrapText:true,rowHeight:32,verticalAlignment:"center"};
+netDebt.freezePanes.freezeRows(4);
+widths(netDebt,{A:34});
+
 title(candidates, "검토 후보 | 정상화 조정 후보 (결론 아님)", "L");
 const candHeaders=["연도","유형","계정/키워드","금액","원문 발췌","접수번호","DART 원문","추출 방식","자동 추출","검토 상태","사용자 조정 여부","조정 사유"];
 candidates.getRange("A4:L4").values=[candHeaders]; header(candidates.getRange("A4:L4"));
@@ -127,7 +158,7 @@ audit.getRange(`C5:D${4+data.years.length}`).format.numberFormat="0";
 audit.getRange(`A5:J${4+data.years.length}`).values=data.years.map(y=>{const f=filingMap[y]||{};return[y,f.report_nm||"사업보고서",f.rcept_dt||"",f.rcept_no||"",f.url||"",data.metadata.basis,"원천 자료 시트 참조","각 분석 시트의 셀 수식 참조","예",""];});
 const formulaHeaderRow = 6 + data.years.length;
 audit.getRange(`A${formulaHeaderRow}:J${formulaHeaderRow}`).merge(); audit.getRange(`A${formulaHeaderRow}`).values=[["산식 정의"]]; header(audit.getRange(`A${formulaHeaderRow}:J${formulaHeaderRow}`));
-audit.getRange(`A${formulaHeaderRow+1}:B${formulaHeaderRow+8}`).values=[["영업이익률","영업이익 / 매출액"],["영업이익 대비 영업현금흐름","영업활동현금흐름 / 영업이익"],["매출채권회전일수","평균 매출채권 / 매출액 × 365"],["재고자산회전일수","평균 재고자산 / 매출원가 × 365"],["매입채무회전일수","평균 매입채무 / 매출원가 × 365"],["순운전자본","매출채권 + 재고자산 - 매입채무"],["순차입금","차입금·사채 + 선택 시 리스부채 - 현금"],["정상화 후보","계정명·원문 키워드 자동 탐지 후 사용자 판단"]];
+audit.getRange(`A${formulaHeaderRow+1}:B${formulaHeaderRow+9}`).values=[["영업이익률","영업이익 / 매출액"],["영업이익 대비 영업현금흐름","영업활동현금흐름 / 영업이익"],["매출채권회전일수","평균 매출채권 / 매출액 × 365"],["재고자산회전일수","평균 재고자산 / 매출원가 × 365"],["매입채무회전일수","평균 매입채무 / 매출원가 × 365"],["순운전자본","매출채권 + 재고자산 - 매입채무"],["순차입금","차입금·사채 + 선택 시 리스부채 - 현금"],["순현금","현금 - 차입금·사채 - 선택 시 리스부채"],["정상화 후보","계정명·원문 키워드 자동 탐지 후 사용자 판단"]];
 audit.freezePanes.freezeRows(4); widths(audit,{A:9,B:27,C:13,D:18,E:45,F:18,G:26,H:42,I:12,J:35});
 
 title(checks,"검증 | 완전성·산식·한계", "G");
@@ -139,16 +170,20 @@ checks.getRange("A5:G9").values=[
   ["영업이익 누락",data.metrics.filter(x=>x.operating_profit==null).length,0,data.metrics.filter(x=>x.operating_profit==null).length,0,data.metrics.every(x=>x.operating_profit!=null)?"정상":"검토 필요","원천 자료 확인"],
   ["원문 수집 오류",(data.errors||[]).length,0,(data.errors||[]).length,0,(data.errors||[]).length===0?"정상":"검토 필요","오류는 제외하지 않고 표시"],
 ];
-checks.getRange("F5:F9").conditionalFormats.add("containsText",{text:"정상",format:{fill:green,font:{bold:true,color:"#006100"}}});
-checks.getRange("F5:F9").conditionalFormats.add("containsText",{text:"검토 필요",format:{fill:red,font:{bold:true,color:"#9C0006"}}});
+checks.getRange("A10:G10").values=[["순차입금 연계",null,null,null,null,null,"순차입금 시트와 QoE 요약 일치 여부"]];
+checks.getRange("B10:F10").formulas=[[`='순차입금'!${lastCol}9`,`='QoE 요약'!${lastCol}13`,`=B10-C10`,"=0",'=IF(ABS(D10)<=E10,"정상","검토 필요")']];
+checks.getRange("B10:E10").format.numberFormat=amountFmt;
+checks.getRange("F5:F10").conditionalFormats.add("containsText",{text:"정상",format:{fill:green,font:{bold:true,color:"#006100"}}});
+checks.getRange("F5:F10").conditionalFormats.add("containsText",{text:"검토 필요",format:{fill:red,font:{bold:true,color:"#9C0006"}}});
 checks.getRange("A12:G12").merge(); checks.getRange("A12").values=[["제한사항"]]; header(checks.getRange("A12:G12"));
 data.limitations.forEach((x,i)=>{const row=13+i; checks.getRange(`A${row}:G${row}`).merge(); checks.getRange(`A${row}`).values=[[x]]; checks.getRange(`A${row}:G${row}`).format={wrapText:true,rowHeight:26};});
 widths(checks,{A:28,B:18,C:18,D:15,E:15,F:15,G:44});
 
-for (const s of [cover,inputs,summary,wc,candidates,audit,checks]) { s.getUsedRange().format.font.name="Aptos"; }
+for (const s of [cover,inputs,summary,wc,netDebt,candidates,audit,checks]) { s.getUsedRange().format.font.name="Aptos"; }
 await fs.mkdir(new URL(".",`file:///${outputPath.replaceAll("\\","/")}`).pathname,{recursive:true}).catch(()=>{});
 const xlsx=await SpreadsheetFile.exportXlsx(wb); await xlsx.save(outputPath);
 const inspection=await wb.inspect({kind:"table",range:"'QoE 요약'!A1:F15",include:"values,formulas",tableMaxRows:20,tableMaxCols:8});
+const netDebtInspection=await wb.inspect({kind:"table",range:`'순차입금'!A1:${lastCol}14`,include:"values,formulas",tableMaxRows:20,tableMaxCols:12});
 const errors=await wb.inspect({kind:"match",searchTerm:"#REF!|#DIV/0!|#VALUE!|#NAME\\?|#N/A",options:{useRegex:true,maxResults:200},summary:"수식 오류 검사"});
-console.log(inspection.ndjson); console.log(errors.ndjson);
-if(previewDir){await fs.mkdir(previewDir,{recursive:true}); for(const s of ["표지","원천 자료","QoE 요약","운전자본","검토 후보","검토 흔적","검증"]){const blob=await wb.render({sheetName:s,autoCrop:"all",scale:1,format:"png"}); await fs.writeFile(`${previewDir}/${s.replaceAll(" ","_")}.png`,new Uint8Array(await blob.arrayBuffer()));}}
+console.log(inspection.ndjson); console.log(netDebtInspection.ndjson); console.log(errors.ndjson);
+if(previewDir){await fs.mkdir(previewDir,{recursive:true}); for(const s of ["표지","원천 자료","QoE 요약","운전자본","순차입금","검토 후보","검토 흔적","검증"]){const blob=await wb.render({sheetName:s,autoCrop:"all",scale:1,format:"png"}); await fs.writeFile(`${previewDir}/${s.replaceAll(" ","_")}.png`,new Uint8Array(await blob.arrayBuffer()));}}
