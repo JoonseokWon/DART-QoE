@@ -74,13 +74,13 @@ const lastCol = excelCol(1 + data.years.length);
 const summaryEndCol = excelCol(Math.max(1 + data.years.length, 8));
 title(summary, "QoE 요약 | 보고이익·정상화 손익·현금전환·순차입금", summaryEndCol);
 summary.getRange("A4").values = [["지표"]];
-summary.getRange("A5:A17").values = [["매출액"],["매출 성장률"],["보고 영업이익"],["보고 영업이익률"],["정상화 영업이익(사용자 조정)"],["정상화 영업이익률(사용자 조정)"],["영업현금흐름"],["영업이익 대비 영업현금흐름"],["순이익"],["순이익–영업현금흐름 괴리"],["순차입금"],["검토 후보 수"],["정상화 조정 반영 건수"]];
+summary.getRange("A5:A18").values = [["매출액"],["매출 성장률"],["보고 영업이익"],["보고 영업이익률"],["정상화 영업이익(사용자 조정)"],["정상화 영업이익률(사용자 조정)"],["영업현금흐름"],["영업이익 대비 영업현금흐름"],["순이익"],["순이익–영업현금흐름 괴리"],["순차입금"],["검토 후보 수"],["확정 조정 반영 건수"],["정상화 판단 미완료 후보 수"]];
 summary.getRange(`B4:${lastCol}4`).values = [data.years];
 summary.getRange(`B4:${lastCol}4`).format = { fill: pale, font: { bold: true }, horizontalAlignment: "right" };
 data.years.forEach((y,i) => {
   const c = excelCol(2+i), src = 5+i;
-  summary.getRange(`${c}5:${c}17`).formulas = [[`='원천 자료'!B${src}`],[i?`=IFERROR(${c}5/${excelCol(1+i)}5-1,"")`:""],[`='원천 자료'!C${src}`],[`=IFERROR(${c}7/${c}5,"")`],[`='정상화 손익'!${c}9`],[`='정상화 손익'!${c}11`],[`='원천 자료'!E${src}`],[`=IFERROR(${c}11/${c}7,"")`],[`='원천 자료'!D${src}`],[`=${c}13-${c}11`],[`='원천 자료'!K${src}+IF('표지'!$B$10="순차입금에 포함",'원천 자료'!L${src},0)-'원천 자료'!I${src}`],[`=COUNTIF('검토 후보'!$A$5:$A$204,${c}$4)`],[`=COUNTIFS('검토 후보'!$A$5:$A$204,${c}$4,'검토 후보'!$M$5:$M$204,"일회성",'검토 후보'!$N$5:$N$204,"영업이익",'검토 후보'!$O$5:$O$204,"예",'검토 후보'!$K$5:$K$204,"<>확인 필요")`]];
-  summary.getRange(`${c}5:${c}17`).format.font = { color: "#000000" };
+  summary.getRange(`${c}5:${c}18`).formulas = [[`='원천 자료'!B${src}`],[i?`=IFERROR(${c}5/${excelCol(1+i)}5-1,"")`:""],[`='원천 자료'!C${src}`],[`=IFERROR(${c}7/${c}5,"")`],[`='정상화 손익'!${c}9`],[`='정상화 손익'!${c}11`],[`='원천 자료'!E${src}`],[`=IFERROR(${c}11/${c}7,"")`],[`='원천 자료'!D${src}`],[`=${c}13-${c}11`],[`='원천 자료'!K${src}+IF('표지'!$B$10="순차입금에 포함",'원천 자료'!L${src},0)-'원천 자료'!I${src}`],[`=COUNTIF('검토 후보'!$A$5:$A$204,${c}$4)`],[`=COUNTIFS('검토 후보'!$A$5:$A$204,${c}$4,'검토 후보'!$M$5:$M$204,"일회성",'검토 후보'!$N$5:$N$204,"영업이익",'검토 후보'!$O$5:$O$204,"예",'검토 후보'!$K$5:$K$204,"<>확인 필요")`],[`=COUNTIF('검토 후보'!$A$5:$A$204,${c}$4)-COUNTIFS('검토 후보'!$A$5:$A$204,${c}$4,'검토 후보'!$M$5:$M$204,"<>미결정",'검토 후보'!$N$5:$N$204,"<>미결정",'검토 후보'!$K$5:$K$204,"<>확인 필요")`]];
+  summary.getRange(`${c}5:${c}18`).format.font = { color: "#000000" };
 });
 summary.getRange(`B5:${lastCol}5`).format.numberFormat = amountFmt; summary.getRange(`B6:${lastCol}6`).format.numberFormat = pctFmt;
 summary.getRange(`B7:${lastCol}7`).format.numberFormat = amountFmt; summary.getRange(`B8:${lastCol}8`).format.numberFormat = pctFmt;
@@ -89,7 +89,8 @@ summary.getRange(`B11:${lastCol}11`).format.numberFormat = amountFmt; summary.ge
 summary.getRange(`B13:${lastCol}15`).format.numberFormat = amountFmt;
 summary.getRange(`B5:${lastCol}15`).format.font.size = financialAmountFontSize;
 summary.getRange("A7:F7").format.borders = { top: { style:"thin", color:navy } };
-summary.getRange(`A18:${summaryEndCol}18`).merge(); summary.getRange("A18").values = [["정상화 영업이익은 사용자 판단이 '일회성', 정상화 대상이 '영업이익', 조정 여부가 '예'인 항목만 반영합니다. 손실은 가산하고 이익은 차감하며, 미결정·반복·순이익 대상은 제외합니다."]]; summary.getRange(`A18:${summaryEndCol}18`).format = { fill: amber, wrapText:true, rowHeight:32 };
+summary.getRange(`B18:${lastCol}18`).conditionalFormats.add("cellIs",{operator:"greaterThan",formula:0,format:{fill:amber,font:{bold:true,color:"#9C6500"}}});
+summary.getRange(`A19:${summaryEndCol}19`).merge(); summary.getRange("A19").values = [["강한 일회성 후보는 정상화 영업이익에 기본 반영됩니다. 원문 확인 결과 반복 항목이거나 보고 영업이익에 포함되지 않았다면 검토 후보에서 조정 여부를 '아니요'로 변경하세요."]]; summary.getRange(`A19:${summaryEndCol}19`).format = { fill: amber, wrapText:true, rowHeight:36 };
 // Keep the chart source and chart below the horizontal summary so longer
 // analysis periods can add year columns without overlapping either area.
 const chartSourceHeaderRow = 23;
@@ -146,15 +147,15 @@ netDebt.getRange(`A14:${netDebtEndCol}14`).format={fill:amber,wrapText:true,rowH
 netDebt.freezePanes.freezeRows(4);
 widths(netDebt,{A:34});
 
-title(candidates, "검토 후보 | 손익 방향·반복성·정상화 대상 검토 (결론 아님)", "Q");
+title(candidates, "검토 후보 | 강한 일회성 손익 후보와 자동 반영 내역", "Q");
 candidates.getRange("A3:B3").merge();
 candidates.getRange("A3").values=[["전체 조정 여부"]];
 candidates.getRange("A3:B3").format={fill:pale,font:{bold:true},verticalAlignment:"center"};
-candidates.getRange("C3").values=[["아니요"]];
+candidates.getRange("C3").values=[["예"]];
 candidates.getRange("C3").dataValidation={rule:{type:"list",values:["예","아니요"]}};
 candidates.getRange("C3").format={fill:amber,font:{bold:true,color:"#0000FF"},horizontalAlignment:"center",verticalAlignment:"center",borders:{preset:"outside",style:"thin",color:blue}};
 candidates.getRange("D3:Q3").merge();
-candidates.getRange("D3").values=[["전체 선택은 조정 여부만 바꿉니다. 사용자 판단이 '일회성'이고 정상화 대상이 '영업이익'인 항목만 정상화 영업이익에 반영됩니다."]];
+candidates.getRange("D3").values=[["강한 일회성 후보는 기본적으로 '일회성·영업이익·예'로 반영됩니다. 원문 확인 후 반복 항목이거나 영업이익에 포함되지 않은 항목은 '아니요' 또는 '제외'로 변경하세요."]];
 candidates.getRange("D3:Q3").format={fill:grey,font:{italic:true,color:"#595959"},wrapText:true,verticalAlignment:"center"};
 candidates.getRange("A3:Q3").format.rowHeight=26;
 const candHeaders=["연도","유형","계정/키워드","자동 추출 금액","원문 발췌","접수번호","DART 원문","추출 방식","자동 추출","검토 상태","손익 방향(자동)","반복성 힌트(자동)","사용자 판단","정상화 대상","조정 여부","적용 금액","조정 사유"];
@@ -201,11 +202,11 @@ candidates.freezePanes.freezeRows(4); widths(candidates,{A:9,B:26,C:24,D:44,E:62
 const normalizedEndCol = excelCol(Math.max(1 + data.years.length, 12));
 title(normalized, "정상화 손익 | 사용자 검토를 반영한 영업이익", normalizedEndCol);
 normalized.getRange("A4").values=[["지표"]];
-normalized.getRange("A5:A12").values=[["보고 영업이익"],["일회성 손실 가산"],["일회성 이익 차감"],["정상화 순조정액"],["정상화 영업이익"],["보고 영업이익률"],["정상화 영업이익률"],["조정 반영 건수"]];
+normalized.getRange("A5:A14").values=[["보고 영업이익"],["확정 일회성 손실 가산"],["확정 일회성 이익 차감"],["정상화 순조정액"],["정상화 영업이익"],["보고 영업이익률"],["정상화 영업이익률"],["확정 조정 반영 건수"],["정상화 판단 미완료 후보 수"],["전체 검토 후보 수"]];
 normalized.getRange(`B4:${lastCol}4`).values=[data.years];
 normalized.getRange(`B4:${lastCol}4`).format={fill:pale,font:{bold:true},horizontalAlignment:"right"};
 data.years.forEach((_,i)=>{const c=excelCol(2+i),src=5+i;
-  normalized.getRange(`${c}5:${c}12`).formulas=[
+  normalized.getRange(`${c}5:${c}14`).formulas=[
     [`='원천 자료'!C${src}`],
     [`=SUMIFS('검토 후보'!$P$5:$P$204,'검토 후보'!$A$5:$A$204,${c}$4,'검토 후보'!$M$5:$M$204,"일회성",'검토 후보'!$N$5:$N$204,"영업이익",'검토 후보'!$O$5:$O$204,"예",'검토 후보'!$K$5:$K$204,"손실")`],
     [`=SUMIFS('검토 후보'!$P$5:$P$204,'검토 후보'!$A$5:$A$204,${c}$4,'검토 후보'!$M$5:$M$204,"일회성",'검토 후보'!$N$5:$N$204,"영업이익",'검토 후보'!$O$5:$O$204,"예",'검토 후보'!$K$5:$K$204,"이익")`],
@@ -214,6 +215,8 @@ data.years.forEach((_,i)=>{const c=excelCol(2+i),src=5+i;
     [`=IFERROR(${c}5/'원천 자료'!B${src},"")`],
     [`=IFERROR(${c}9/'원천 자료'!B${src},"")`],
     [`=COUNTIFS('검토 후보'!$A$5:$A$204,${c}$4,'검토 후보'!$M$5:$M$204,"일회성",'검토 후보'!$N$5:$N$204,"영업이익",'검토 후보'!$O$5:$O$204,"예",'검토 후보'!$K$5:$K$204,"<>확인 필요")`],
+    [`=COUNTIF('검토 후보'!$A$5:$A$204,${c}$4)-COUNTIFS('검토 후보'!$A$5:$A$204,${c}$4,'검토 후보'!$M$5:$M$204,"<>미결정",'검토 후보'!$N$5:$N$204,"<>미결정",'검토 후보'!$K$5:$K$204,"<>확인 필요")`],
+    [`=COUNTIF('검토 후보'!$A$5:$A$204,${c}$4)`],
   ];
   normalized.getRange(`${c}:${c}`).format.columnWidth=financialAmountColumnWidth;
 });
@@ -221,23 +224,24 @@ normalized.getRange(`B5:${lastCol}9`).format.numberFormat=amountFmt;
 normalized.getRange(`B10:${lastCol}11`).format.numberFormat=pctFmt;
 normalized.getRange(`A8:${lastCol}8`).format.borders={top:{style:"thin",color:navy}};
 normalized.getRange(`A9:${lastCol}11`).format={fill:pale,font:{bold:true,color:"#000000"}};
-normalized.getRange(`B5:${lastCol}12`).format.font.size=financialAmountFontSize;
-normalized.getRange(`A14:${normalizedEndCol}14`).merge();
-normalized.getRange("A14").values=[["사용 방법: 검토 후보 시트에서 원문을 확인한 뒤 사용자 판단을 '일회성', 정상화 대상을 '영업이익', 조정 여부를 '예'로 선택한 항목만 반영됩니다. 손실은 가산하고 이익은 차감하며, 미결정·반복·순이익 대상은 제외됩니다."]];
-normalized.getRange(`A14:${normalizedEndCol}14`).format={fill:amber,wrapText:true,rowHeight:38,verticalAlignment:"center"};
-normalized.getRange("A17:L17").values=[["연도","유형","계정/키워드","자동 추출 금액","손익 방향","반복성 힌트","사용자 판단","정상화 대상","조정 여부","적용 금액","조정 사유","DART 원문"]];
-header(normalized.getRange("A17:L17"));
+normalized.getRange(`B5:${lastCol}14`).format.font.size=financialAmountFontSize;
+normalized.getRange(`B13:${lastCol}13`).conditionalFormats.add("cellIs",{operator:"greaterThan",formula:0,format:{fill:amber,font:{bold:true,color:"#9C6500"}}});
+normalized.getRange(`A16:${normalizedEndCol}16`).merge();
+normalized.getRange("A16").values=[["유형자산 처분·자산 손상·소송·재해·구조조정·거래 관련 비용의 강한 일회성 후보는 기본 반영됩니다. 원문 확인 결과 반복 항목이거나 영업이익에 포함되지 않았다면 검토 후보에서 조정 여부를 '아니요'로 변경하세요."]];
+normalized.getRange(`A16:${normalizedEndCol}16`).format={fill:amber,wrapText:true,rowHeight:38,verticalAlignment:"center"};
+normalized.getRange("A19:L19").values=[["연도","유형","계정/키워드","자동 추출 금액","손익 방향","반복성 힌트","사용자 판단","정상화 대상","조정 여부","적용 금액","조정 사유","DART 원문"]];
+header(normalized.getRange("A19:L19"));
 const normalizedCandidateCount=(data.candidates||[]).slice(0,200).length;
 if(normalizedCandidateCount){
-  for(let i=0;i<normalizedCandidateCount;i++){const row=18+i,source=5+i;
+  for(let i=0;i<normalizedCandidateCount;i++){const row=20+i,source=5+i;
     normalized.getRange(`A${row}:L${row}`).formulas=[[`='검토 후보'!A${source}`,`='검토 후보'!B${source}`,`='검토 후보'!C${source}`,`='검토 후보'!D${source}`,`='검토 후보'!K${source}`,`='검토 후보'!L${source}`,`='검토 후보'!M${source}`,`='검토 후보'!N${source}`,`='검토 후보'!O${source}`,`='검토 후보'!P${source}`,`=IF('검토 후보'!Q${source}="","",'검토 후보'!Q${source})`,`='검토 후보'!G${source}`]];
   }
-  normalized.getRange(`D18:D${17+normalizedCandidateCount}`).format.numberFormat=amountFmt;
-  normalized.getRange(`J18:J${17+normalizedCandidateCount}`).format.numberFormat=amountFmt;
-  normalized.getRange(`K18:L${17+normalizedCandidateCount}`).format.wrapText=true;
+  normalized.getRange(`D20:D${19+normalizedCandidateCount}`).format.numberFormat=amountFmt;
+  normalized.getRange(`J20:J${19+normalizedCandidateCount}`).format.numberFormat=amountFmt;
+  normalized.getRange(`K20:L${19+normalizedCandidateCount}`).format.wrapText=true;
 }else{
-  normalized.getRange("A18:L18").merge();
-  normalized.getRange("A18").values=[["탐지된 검토 후보가 없습니다. 원문과 계정 매핑의 완전성을 별도로 확인하세요."]];
+  normalized.getRange("A20:L20").merge();
+  normalized.getRange("A20").values=[["탐지된 검토 후보가 없습니다. 원문과 계정 매핑의 완전성을 별도로 확인하세요."]];
 }
 normalized.freezePanes.freezeRows(4);
 widths(normalized,{A:34,B:24,C:24,D:22,E:16,F:18,G:16,H:16,I:14,J:22,K:38,L:42});
@@ -281,8 +285,8 @@ widths(checks,{A:28,B:44,C:44,D:28,E:18,F:15,G:44});
 for (const s of [cover,inputs,summary,normalized,wc,netDebt,candidates,audit,checks]) { s.getUsedRange().format.font.name="Aptos"; }
 await fs.mkdir(new URL(".",`file:///${outputPath.replaceAll("\\","/")}`).pathname,{recursive:true}).catch(()=>{});
 const xlsx=await SpreadsheetFile.exportXlsx(wb); await xlsx.save(outputPath);
-const inspection=await wb.inspect({kind:"table",range:"'QoE 요약'!A1:F18",include:"values,formulas",tableMaxRows:22,tableMaxCols:8});
-const normalizedInspection=await wb.inspect({kind:"table",range:`'정상화 손익'!A1:${lastCol}14`,include:"values,formulas",tableMaxRows:20,tableMaxCols:12});
+const inspection=await wb.inspect({kind:"table",range:"'QoE 요약'!A1:F19",include:"values,formulas",tableMaxRows:24,tableMaxCols:8});
+const normalizedInspection=await wb.inspect({kind:"table",range:`'정상화 손익'!A1:${lastCol}16`,include:"values,formulas",tableMaxRows:22,tableMaxCols:12});
 const netDebtInspection=await wb.inspect({kind:"table",range:`'순차입금'!A1:${lastCol}14`,include:"values,formulas",tableMaxRows:20,tableMaxCols:12});
 const errors=await wb.inspect({kind:"match",searchTerm:"#REF!|#DIV/0!|#VALUE!|#NAME\\?|#N/A",options:{useRegex:true,maxResults:200},summary:"수식 오류 검사"});
 console.log(inspection.ndjson); console.log(normalizedInspection.ndjson); console.log(netDebtInspection.ndjson); console.log(errors.ndjson);

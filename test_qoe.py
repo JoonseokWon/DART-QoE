@@ -23,14 +23,11 @@ class DemoAnalysisTests(unittest.TestCase):
         self.assertEqual(classify_candidate_profit_loss("손상환입"), "이익")
         self.assertEqual(classify_candidate_profit_loss("관계기업투자"), "확인 필요")
 
-    def test_recurrence_and_normalization_scope_are_separate(self):
-        self.assertEqual(classify_recurrence_hint("재고자산평가손실"), "반복 가능")
-        self.assertEqual(classify_recurrence_hint("대손상각비"), "반복 가능")
-        self.assertEqual(classify_recurrence_hint("중단영업손실"), "일회성 가능")
-        self.assertEqual(classify_recurrence_hint("유형자산처분이익"), "확인 필요")
-        self.assertEqual(classify_normalization_scope("재고자산평가손실"), "영업이익")
-        self.assertEqual(classify_normalization_scope("지분법이익"), "순이익")
-        self.assertEqual(classify_normalization_scope("유형자산처분이익"), "미결정")
+    def test_strict_one_time_candidates_default_to_operating_profit(self):
+        self.assertEqual(classify_recurrence_hint("유형자산처분이익", category="유형자산 처분손익"), "일회성 가능")
+        self.assertEqual(classify_recurrence_hint("소송손실", category="소송·재해 등 사건"), "일회성 가능")
+        self.assertEqual(classify_normalization_scope("손상차손", category="자산 손상"), "영업이익")
+        self.assertEqual(classify_normalization_scope("지분법이익"), "미결정")
 
     def test_note_candidates_require_and_convert_disclosed_amounts(self):
         note = """
@@ -50,6 +47,17 @@ class DemoAnalysisTests(unittest.TestCase):
 
     def test_note_candidates_skip_keywords_without_amount_or_unit(self):
         note = "회사는 관계기업 투자와 충당부채 및 기타수익에 관한 회계정책을 적용합니다."
+        self.assertEqual(_note_candidates(note, 2024, "202500000001"), [])
+
+    def test_recurring_and_non_operating_items_are_not_extracted(self):
+        note = """
+        (단위: 백만원)
+        재고자산평가손실\t1,200
+        대손상각비\t300
+        정부보조금수익\t500
+        지분법이익\t900
+        기타수익\t700
+        """
         self.assertEqual(_note_candidates(note, 2024, "202500000001"), [])
 
     def test_candidate_rows_use_profit_and_loss_statements_and_deduplicate(self):
@@ -99,9 +107,7 @@ class DemoAnalysisTests(unittest.TestCase):
         미처분이익잉여금\t23,614,523\t8,401,233
         """
         candidates = _note_candidates(note, 2021, "20220308000798")
-        self.assertEqual(len(candidates), 1)
-        self.assertEqual(candidates[0]["account"], "기타수익")
-        self.assertEqual(candidates[0]["amount"], 7_359_004_000_000)
+        self.assertEqual(candidates, [])
 
     def setUp(self):
         self.data = demo_analysis()
@@ -117,9 +123,12 @@ class DemoAnalysisTests(unittest.TestCase):
         self.assertEqual(current["net_debt"], 33_000_000_000)
         self.assertAlmostEqual(current["operating_margin"], 0.105)
 
-    def test_candidates_are_review_flags_not_adjustments(self):
+    def test_strict_candidates_are_initially_reflected_and_remain_reviewable(self):
         self.assertGreaterEqual(len(self.data["candidates"]), 2)
         self.assertTrue(all(x["status"] == "확인 필요" for x in self.data["candidates"]))
+        self.assertTrue(all(x["user_recurrence"] == "일회성" for x in self.data["candidates"]))
+        self.assertTrue(all(x["normalization_scope"] == "영업이익" for x in self.data["candidates"]))
+        self.assertTrue(all(x["user_adjustment"] == "예" for x in self.data["candidates"]))
 
     def test_accounts_fall_back_to_separate_statements(self):
         client = DartClient("test")
