@@ -273,6 +273,7 @@ def build_result_summary(data: dict) -> str:
         ),
         f"• 자금 상태: {latest_year}년 {debt_text}",
         f"• 정상화 조정 검토 후보: {candidate_text}",
+        "• 정상화 손익: Excel에서 조정 여부·가산/차감 방향·적용 금액을 입력하면 자동 계산",
         "",
         "[추가 확인 포인트]",
         *[f"• {point}" for point in review_points[:3]],

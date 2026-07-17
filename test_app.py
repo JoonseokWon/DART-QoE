@@ -48,6 +48,7 @@ class ResultSummaryTests(unittest.TestCase):
         self.assertIn("매출 대비 순운전자본: 2024년", summary)
         self.assertIn("자금 상태: 2024년 순현금 -330.0억원 (순차입금 330.0억원)", summary)
         self.assertIn("정상화 조정 검토 후보: 2건", summary)
+        self.assertIn("정상화 손익: Excel에서 조정 여부·가산/차감 방향·적용 금액을 입력하면 자동 계산", summary)
         self.assertIn("[추가 확인 포인트]", summary)
         self.assertIn(
             "순차입금이 2022년 150.0억원에서 2024년 330.0억원으로 180.0억원 증가했습니다.",
