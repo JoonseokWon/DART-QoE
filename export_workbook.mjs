@@ -62,7 +62,7 @@ inputs.getRange("A4:O4").values = [sourceHeaders]; header(inputs.getRange("A4:O4
 inputs.getRange(`A5:O${4+data.metrics.length}`).values = data.metrics.map(m => [m.year,m.revenue,m.operating_profit,m.net_income,m.cfo,m.ar,m.inventory,m.ap,m.cash,m.cogs,m.debt,m.lease,"전자공시 재무제표 조회","예",""]);
 inputs.getRange(`B5:L${4+data.metrics.length}`).format = { numberFormat: amountFmt, font: { color: "#008000" } };
 inputs.getRange(`O5:O${4+data.metrics.length}`).format = { fill: amber, font: { color: "#0000FF" } };
-inputs.freezePanes.freezeRows(4); widths(inputs,{A:10,B:17,C:17,D:17,E:19,F:17,G:17,H:17,I:20,J:17,K:18,L:16,M:26,N:12,O:28});
+inputs.freezePanes.freezeRows(4); widths(inputs,{A:10,B:24,C:24,D:24,E:24,F:24,G:24,H:24,I:24,J:24,K:24,L:24,M:26,N:12,O:28});
 
 const lastCol = excelCol(1 + data.years.length);
 const summaryEndCol = excelCol(Math.max(1 + data.years.length, 8));
@@ -92,6 +92,7 @@ data.years.forEach((y,i)=>{ const row=chartSourceFirstRow+i, src=excelCol(2+i); 
 const chart = summary.charts.add("line", summary.getRange(`A${chartSourceHeaderRow}:C${chartSourceLastRow}`));
 chart.title="이익률과 현금전환 추이"; chart.hasLegend=true; chart.yAxis={numberFormatCode:"0%"}; chart.setPosition(`E${chartSourceHeaderRow}`,`L${chartSourceHeaderRow+13}`);
 summary.freezePanes.freezeRows(4); widths(summary,{A:28,B:16,C:16,D:16,E:16,F:16,G:3,H:16,I:3,J:16,K:16,L:16,M:16,N:16,O:16,P:16,Q:16});
+data.years.forEach((_,i)=>{ const c=excelCol(2+i); summary.getRange(`${c}:${c}`).format.columnWidth=22; });
 
 const wcEndCol = excelCol(Math.max(1 + data.years.length, 10));
 title(wc, "운전자본 | 회전일수와 순운전자본", wcEndCol);
@@ -104,6 +105,7 @@ data.years.forEach((_,i)=>{ const c=excelCol(2+i), src=5+i, prev=excelCol(1+i);
 wc.getRange(`B5:${lastCol}5`).format.numberFormat=amountFmt; wc.getRange(`B6:${lastCol}9`).format.numberFormat=daysFmt; wc.getRange(`B10:${lastCol}10`).format.numberFormat=amountFmt; wc.getRange(`B11:${lastCol}12`).format.numberFormat=pctFmt;
 wc.getRange(`A14:${wcEndCol}14`).merge(); wc.getRange("A14").values=[["운전자본 검토 포인트: 매출채권·재고 증가율이 매출 증가율을 크게 초과하거나 현금전환주기가 연속 상승하면 계약조건, 재고 진부화, 매출 인식 시점을 공시 원문과 함께 확인하세요."]]; wc.getRange(`A14:${wcEndCol}14`).format={fill:amber,wrapText:true,rowHeight:32,verticalAlignment:"center"};
 wc.freezePanes.freezeRows(4); widths(wc,{A:36,B:18,C:18,D:18,E:18,F:18,G:16,H:16,I:16,J:16});
+data.years.forEach((_,i)=>{ const c=excelCol(2+i); wc.getRange(`${c}:${c}`).format.columnWidth=22; });
 
 title(candidates, "검토 후보 | 정상화 조정 후보 (결론 아님)", "L");
 const candHeaders=["연도","유형","계정/키워드","금액","원문 발췌","접수번호","DART 원문","추출 방식","자동 추출","검토 상태","사용자 조정 여부","조정 사유"];
