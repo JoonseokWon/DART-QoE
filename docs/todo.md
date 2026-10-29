@@ -15,5 +15,5 @@
 - [x] 넓은 창·좁은 창 화면 검증
 - [x] README와 handoff 갱신
 - [x] 버전 갱신 및 실행파일 빌드
-- [ ] Git 커밋·푸시·GitHub Release 생성
+- [x] Git 커밋·푸시·GitHub Release 생성
 

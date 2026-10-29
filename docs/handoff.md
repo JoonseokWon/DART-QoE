@@ -3,7 +3,7 @@
 - 기준일: 2026-10-29
 - UI·UX 적용 여부: 적용 / 화면 있음
 - 목적: 공시 재무제표·주석을 이용한 이익 지속성, 현금전환, 운전자본과 순차입금 검토 보조
-- 현재 상태: v0.3.0 화면 개선과 회귀 검증 완료. 배포 빌드·릴리스 결과는 아래에 갱신한다.
+- 현재 상태: v0.3.0 화면 개선, 회귀 검증, Windows 빌드와 GitHub Release 배포 완료.
 
 ## 완료한 작업
 
@@ -60,4 +60,12 @@
 
 ## 배포 결과
 
-검증된 실행파일 빌드 후 GitHub Release URL과 파일 해시를 기록한다.
+- 릴리스: https://github.com/JoonseokWon/DART-QoE/releases/tag/v0.3.0
+- 릴리스 소스 커밋: `40c55ab`
+- 실행파일: `DART-QoE.exe`, 81,401,400바이트, 파일 버전 0.3.0
+- SHA-256: `d052a1c40d7fdc960259955126103a56be67bf601aecdc00e211f517f2735475`
+- GitHub 자산 업로드 후 서버가 반환한 크기와 SHA-256이 로컬 파일과 일치함을 확인했다.
+- 최종 EXE의 `--smoke-test`가 종료 코드 0으로 Excel 생성을 완료했다.
+- 기존 `Documents/GitHub/DART-QoE/DART-QoE.exe`도 같은 해시의 새 파일로 교체했다.
+- 백그라운드 작업 요청에 따라 배포 앱을 전면 실행하지 않았고 테스트 창을 종료했다.
+- 검증용 Excel: `outputs/release-v0.3.0/validation.xlsx` (배포 자산에 샘플 데이터는 포함하지 않음)
